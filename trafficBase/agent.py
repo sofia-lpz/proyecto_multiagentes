@@ -1,31 +1,42 @@
 from mesa import Agent
 
 class Car(Agent):
-    """
-    Agent that moves randomly.
-    Attributes:
-        unique_id: Agent's ID 
-        direction: Randomly chosen direction chosen from one of eight directions
-    """
     def __init__(self, unique_id, model):
-        """
-        Creates a new random agent.
-        Args:
-            unique_id: The agent's ID
-            model: Model reference for the agent
-        """
         super().__init__(unique_id, model)
-
+        self.next_pos = None
+    
     def move(self):
-        """ 
-        Determines if the agent can move in the direction that was chosen
-        """        
-        self.model.grid.move_to_empty(self)
-
+        possible_steps = self.model.grid.get_neighborhood(
+            self.pos,
+            moore=False,  # Only consider von Neumann neighborhood
+            include_center=False
+        )
+        
+        # Filter for valid road cells
+        valid_steps = []
+        for pos in possible_steps:
+            cell_contents = self.model.grid.get_cell_list_contents(pos)
+            # Check for road and direction
+            for content in cell_contents:
+                if isinstance(content, Road):
+                    if content.direction == "Right" and pos[0] > self.pos[0]:
+                        valid_steps.append(pos)
+                    elif content.direction == "Left" and pos[0] < self.pos[0]:
+                        valid_steps.append(pos)
+                    elif content.direction == "Up" and pos[1] > self.pos[1]:
+                        valid_steps.append(pos)
+                    elif content.direction == "Down" and pos[1] < self.pos[1]:
+                        valid_steps.append(pos)
+        
+        if valid_steps:
+            # Choose a random valid step
+            self.next_pos = self.random.choice(valid_steps)
+            
+            # Check if next position is empty
+            if self.model.grid.is_cell_empty(self.next_pos):
+                self.model.grid.move_agent(self, self.next_pos)
+    
     def step(self):
-        """ 
-        Determines the new direction it will take, and then moves
-        """
         self.move()
 
 class Traffic_Light(Agent):
