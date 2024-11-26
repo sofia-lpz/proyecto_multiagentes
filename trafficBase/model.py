@@ -51,6 +51,10 @@ class CityModel(Model):
         self.num_agents = N
         self.running = True
 
+        car = Car(f"car_0", self)
+        self.grid.place_agent(car, (0, 0))
+        self.schedule.add(car)
+
     def step(self):
         '''Advance the model by one step.'''
         self.schedule.step()
