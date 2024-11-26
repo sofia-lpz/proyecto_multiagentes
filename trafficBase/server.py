@@ -33,6 +33,12 @@ def agent_portrayal(agent):
         portrayal["w"] = 0.8
         portrayal["h"] = 0.8
 
+    if (isinstance(agent, Car)):
+        portrayal["Shape"] = "circle"  # Change shape to circle
+        portrayal["Color"] = "blue"
+        portrayal["Layer"] = 2
+        portrayal["r"] = 0.8  # Use radius instead of width/height for circles
+
     return portrayal
 
 width = 0
