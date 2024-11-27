@@ -74,7 +74,6 @@ class CityModel(Model):
                         for position, (is_valid, nr, nc, symbol) in neighbors.items():
                             if is_valid and symbol in road_symbols:
                                 road_direction = neighbor_to_road_direction[position]
-                                print(f"Found road at {position}, setting direction to {road_direction}")
                                 break
                         
                         road = Road(f"r_{r*self.width+c}", self, road_direction)
