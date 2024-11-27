@@ -23,15 +23,37 @@ class Car(Agent):
 
     def can_turn(self, current_road, next_road):
         """
-        Determine if a turn from current road to next road is valid
+        Determine if a turn from current road to next road is valid.
         """
+        # Define valid turns and their required road directions
         valid_turns = {
-            "Right": ["Up", "Down"],
-            "Left": ["Up", "Down"],
-            "Up": ["Left", "Right"],
-            "Down": ["Left", "Right"]
+            "Right": {
+                "Up": "Up",     
+                "Down": "Down"  
+            },
+            "Left": {
+                "Up": "Up",     
+                "Down": "Down"  
+            },
+            "Up": {
+                "Left": "Left",   
+                "Right": "Right" 
+            },
+            "Down": {
+                "Left": "Left",   
+                "Right": "Right"  
+            }
         }
-        return next_road.direction in valid_turns.get(current_road.direction, [])
+
+        required_direction = self.get_direction_from_coords(self.pos, self.next_pos) # the direction the car needs to take to turn onto a road
+        direction_of_turned_road = next_road.direction # the direction of the road the car is turning onto
+
+        if current_road.direction in valid_turns:
+            allowed_turns = valid_turns[current_road.direction]
+            if required_direction in allowed_turns:
+                return direction_of_turned_road == allowed_turns[required_direction]
+            
+        return False
 
     def move(self):
         possible_steps = self.model.grid.get_neighborhood(
@@ -86,6 +108,11 @@ class Car(Agent):
                     self.can_turn(current_road, next_road)):
                     valid_steps.append(pos)
 
+        # Print direction for each valid step
+        for step in valid_steps:
+            direction = self.get_direction_from_coords(self.pos, step)
+            print(f"Position {step}: {direction}")
+
         if valid_steps:
             # TODO: Add logic to choose best step towards destination
             self.next_pos = self.random.choice(valid_steps)
@@ -103,7 +130,6 @@ class Car(Agent):
 
     def step(self):
         self.move()
-
 
 class Traffic_Light(Agent):
     """
