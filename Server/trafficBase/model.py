@@ -6,7 +6,7 @@ import json
 
 class CityModel(Model):
     def __init__(self, N):
-        dataDictionary = json.load(open("city_files/mapDictionary.json"))
+        dataDictionary = json.load(open("./city_files/mapDictionary.json"))
         self.traffic_lights = []
 
         # Define valid road directions based on neighbor position
@@ -17,7 +17,7 @@ class CityModel(Model):
             "right": "Left"   # If neighbor is right, road should point left
         }
 
-        with open('city_files/2024_base.txt') as baseFile:
+        with open('./city_files/2024_base.txt') as baseFile:
             lines = baseFile.readlines()
             self.width = len(lines[0])-1
             self.height = len(lines)
@@ -27,7 +27,7 @@ class CityModel(Model):
 
             for r, row in enumerate(lines):
                 for c, col in enumerate(row):
-                    if col in ["v", "^", ">", "<"]:
+                    if col in ["V", "^", ">", "<"]:
                         agent = Road(f"r_{r*self.width+c}", self, dataDictionary[col])
                         self.grid.place_agent(agent, (c, self.height - r - 1))
 
@@ -37,10 +37,10 @@ class CityModel(Model):
                         self.schedule.add(agent)
                         self.traffic_lights.append(agent)
                         
-                        road_direction = None
-                        if r > 0 and lines[r-1][c] in ["v", "^"]:
+                        road_direction = "Up"
+                        if r > 0 and lines[r-1][c] in ["V", "^"]:
                             road_direction = dataDictionary[lines[r-1][c]]
-                        elif r < len(lines)-1 and lines[r+1][c] in ["v", "^"]:
+                        elif r < len(lines)-1 and lines[r+1][c] in ["V", "^"]:
                             road_direction = dataDictionary[lines[r+1][c]]
                         elif c > 0 and lines[r][c-1] in [">", "<"]:
                             road_direction = dataDictionary[lines[r][c-1]]
@@ -60,7 +60,7 @@ class CityModel(Model):
                         self.grid.place_agent(agent, (c, self.height - r - 1))
                         
                         road_direction = "Right"  # Default direction
-                        road_symbols = ["v", "^", ">", "<"]
+                        road_symbols = ["V", "^", ">", "<"]
                         
                         # Check all neighboring cells
                         neighbors = {
