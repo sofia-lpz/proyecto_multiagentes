@@ -17,7 +17,7 @@ class CityModel(Model):
             "right": "Left"   # If neighbor is right, road should point left
         }
 
-        with open('city_files/2023_base.txt') as baseFile:
+        with open('city_files/2024_base.txt') as baseFile:
             lines = baseFile.readlines()
             self.width = len(lines[0])-1
             self.height = len(lines)
