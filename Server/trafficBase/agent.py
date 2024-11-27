@@ -86,7 +86,7 @@ class Car(Agent):
         """Get valid neighboring positions around a given position."""
         neighbors = self.model.grid.get_neighborhood(
             pos,
-            moore=True,  # Use von Neumann neighborhood
+            moore=False,  # Use von Neumann neighborhood
             include_center=False
         )
         valid_neighbors = []
