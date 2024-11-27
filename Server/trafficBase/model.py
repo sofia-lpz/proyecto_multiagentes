@@ -6,7 +6,7 @@ import json
 
 class CityModel(Model):
     def __init__(self, N):
-        dataDictionary = json.load(open("city_files/mapDictionary.json"))
+        dataDictionary = json.load(open("./city_files/mapDictionary.json"))
         self.traffic_lights = []
 
         # Define valid road directions based on neighbor position
@@ -17,7 +17,7 @@ class CityModel(Model):
             "right": "Left"   # If neighbor is right, road should point left
         }
 
-        with open('city_files/2024_base.txt') as baseFile:
+        with open('./city_files/2024_base.txt') as baseFile:
             lines = baseFile.readlines()
             self.width = len(lines[0])-1
             self.height = len(lines)
