@@ -1,6 +1,12 @@
 from mesa import Agent
 
 class Car(Agent):
+    def calculate_distance(self, pos1, pos2):
+        """
+        Calculate Manhattan distance between two positions
+        """
+        return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
+    
     def get_direction_from_coords(self, current_pos, next_pos):
         dx = next_pos[0] - current_pos[0]
         dy = next_pos[1] - current_pos[1]
