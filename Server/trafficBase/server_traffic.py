@@ -101,12 +101,20 @@ def getObstacles():
 def updateModel():
     global currentStep, cityModel
     if request.method == 'GET':
+        if cityModel is None:
+            print("Debug: Cannot update - model not initialized")
+            return jsonify({"message": "Model not initialized. Call /init first"}), 400
+            
         try:
+            print(f"Debug: Updating model at step {currentStep}")
             cityModel.step()
             currentStep += 1
-            return jsonify({'message': f'Model updated to step {currentStep}.', 'currentStep': currentStep})
+            return jsonify({
+                'message': f'Model updated to step {currentStep}.',
+                'currentStep': currentStep
+            })
         except Exception as e:
-            print(e)
+            print(f"Debug: Update failed with error: {str(e)}")
             return jsonify({"message": "Error updating model"}), 500
 
 if __name__=='__main__':

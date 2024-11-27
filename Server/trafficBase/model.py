@@ -8,6 +8,9 @@ class CityModel(Model):
     def __init__(self, N):
         dataDictionary = json.load(open("./city_files/mapDictionary.json"))
         self.traffic_lights = []
+        self.car_count = 0  # Add counter for unique car IDs
+        self.destinations = []  # Make destinations a class variable
+
 
         # Define valid road directions based on neighbor position
         neighbor_to_road_direction = {
@@ -82,35 +85,38 @@ class CityModel(Model):
         self.num_agents = N
         self.running = True
 
+        for cell in self.grid.coord_iter():
+            cell_content = cell[0]
+            for agent in cell_content:
+                if isinstance(agent, Destination):
+                    self.destinations.append(agent)
+
+
         destinations = []
         for cell in self.grid.coord_iter():
             cell_content = cell[0]
             for agent in cell_content:
                 if isinstance(agent, Destination):
                     destinations.append(agent)
-
-        if destinations:
-            # First car
-            destination = self.random.choice(destinations)
-            car = Car(f"car_0", self, destination)
-            self.grid.place_agent(car, (0, 0))
-            self.schedule.add(car)
-            
-            # Second car with a different destination
-            remaining_destinations = [d for d in destinations if d != destination]
-            if remaining_destinations:
-                destination2 = self.random.choice(remaining_destinations)
-                car2 = Car(f"car_1", self, destination2)
-                self.grid.place_agent(car2, (0, 1))
-                self.schedule.add(car2)
-
-            # Third car with a different destination
-            remaining_destinations = [d for d in destinations if d != destination and d != destination2]
-            if remaining_destinations:
-                destination3 = self.random.choice(remaining_destinations)
-                car3 = Car(f"car_2", self, destination3)
-                self.grid.place_agent(car3, (0, 2))
-                self.schedule.add(car3)
             
     def step(self):
+        # Spawn cars every 2 steps
+        if self.schedule.steps % 10 == 0 and self.destinations:
+            corners = [
+                (0, 0),                    # Bottom left
+                (0, self.height-1),        # Top left
+                (self.width-1, 0),         # Bottom right
+                (self.width-1, self.height-1) # Top right
+            ]
+            
+            for corner in corners:
+                # Check if position is empty
+                cell_contents = self.grid.get_cell_list_contents(corner)
+                if not any(isinstance(content, Car) for content in cell_contents):
+                    destination = self.random.choice(self.destinations)
+                    car = Car(f"car_{self.car_count}", self, destination)
+                    self.grid.place_agent(car, corner)
+                    self.schedule.add(car)
+                    self.car_count += 1
+        
         self.schedule.step()
