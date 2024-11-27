@@ -155,6 +155,11 @@ class Car(Agent):
                 required_direction != opposite_turns.get(current_road.direction))
 
     def move(self):
+        if self.pos == self.destination.pos:
+            self.model.grid.remove_agent(self)
+            self.model.schedule.remove(self)
+            return
+
         # If we don't have a path or need to recalculate
         if not self.path:
             self.path = self.find_path()
