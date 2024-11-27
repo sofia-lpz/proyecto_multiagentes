@@ -13,31 +13,35 @@ class Car(Agent):
         )
         
         valid_steps = []
+
+        current_cell_contents = self.model.grid.get_cell_list_contents(self.pos)
+
+        current_road = None
+        for content in current_cell_contents:
+            if isinstance(content, Road):
+                current_road = content
+                break
+
         for pos in possible_steps:
             # Skip if position is out of grid bounds
             if pos[0] < 0 or pos[1] < 0 or pos[0] >= self.model.grid.width or pos[1] >= self.model.grid.height:
                 continue
                 
-            cell_contents = self.model.grid.get_cell_list_contents(pos)
-            
-            # Look for a road in the cell contents first
+            pos_cell_contents = self.model.grid.get_cell_list_contents(pos)
+
             road = None
-            for content in cell_contents:
+            for content in pos_cell_contents:
                 if isinstance(content, Road):
                     road = content
-                    print(f"Road: {road.direction}")
                     break
             
             if road:
-                # Check for traffic light
                 traffic_light = None
-                for content in cell_contents:
+                for content in pos_cell_contents:
                     if isinstance(content, Traffic_Light):
                         traffic_light = content
                         break
-                
-                # Only skip if there's a red light
-                # If no traffic light or green light, continue checking direction
+
                 if traffic_light and not traffic_light.state:
                     print("Red light")
                     continue
@@ -45,6 +49,7 @@ class Car(Agent):
                     print("Green light")
                     
                 # Check direction matches movement
+                # hypothetical direction of the car if pos is picked.
                 dx = pos[0] - self.pos[0]
                 dy = pos[1] - self.pos[1]
                 
@@ -62,7 +67,8 @@ class Car(Agent):
             
             # Check if there are no cars in the next position
             cars = [agent for agent in next_pos_contents if isinstance(agent, Car)]
-            if not cars:
+            obstacles = [agent for agent in next_pos_contents if isinstance(agent, Obstacle)]
+            if not cars and not obstacles:
                 self.model.grid.move_agent(self, self.next_pos)
 
     def step(self):
