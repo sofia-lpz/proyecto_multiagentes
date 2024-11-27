@@ -22,10 +22,12 @@ def agent_portrayal(agent):
         portrayal["Layer"] = 0
 
     if (isinstance(agent, Traffic_Light)):
+        portrayal["Shape"] = "circle"
         portrayal["Color"] = "red" if not agent.state else "green"
-        portrayal["Layer"] = 0
+        portrayal["Layer"] = 2
         portrayal["w"] = 0.8
         portrayal["h"] = 0.8
+        portrayal["r"] = 0.8
 
     if (isinstance(agent, Obstacle)):
         portrayal["Color"] = "cadetblue"
