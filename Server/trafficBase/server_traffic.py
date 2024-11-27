@@ -118,4 +118,4 @@ def updateModel():
             return jsonify({"message": "Error updating model"}), 500
 
 if __name__=='__main__':
-    app.run(host="localhost", port=8585, debug=True)
+    app.run(host="localhost", port=8585, debug=False)
