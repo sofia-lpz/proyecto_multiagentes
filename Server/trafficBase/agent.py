@@ -188,6 +188,7 @@ class Car(Agent):
     def move(self):
         # If at destination or alternate destination, remove the car
         if self.pos == self.destination.pos or (self.alternate_destination and self.pos == self.alternate_destination):
+            self.model.cars_completed += 1 
             self.model.grid.remove_agent(self)
             self.model.schedule.remove(self)
             return
