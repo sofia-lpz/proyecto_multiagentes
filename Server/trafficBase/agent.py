@@ -44,10 +44,10 @@ class Car(Agent):
         is_valid = direction_of_turned_road != opposite_turns.get(required_direction) and required_direction != opposite_turns.get(current_road.direction)
         print(f"Turn is valid: {is_valid}")
         return is_valid
-
-    def move(self):
+        
+    def get_valid_neighborhood(self, pos):
         possible_steps = self.model.grid.get_neighborhood(
-            self.pos,
+            pos,
             moore=False,
             include_center=False
         )
@@ -55,7 +55,7 @@ class Car(Agent):
         valid_steps = []
 
         # Get current road
-        current_cell_contents = self.model.grid.get_cell_list_contents(self.pos)
+        current_cell_contents = self.model.grid.get_cell_list_contents(pos)
         current_road = None
         for content in current_cell_contents:
             if isinstance(content, Road):
@@ -63,14 +63,14 @@ class Car(Agent):
                 break
 
         if not current_road:
-            return
+            return valid_steps
 
-        for pos in possible_steps:
+        for step_pos in possible_steps:
             # Skip if position is out of grid bounds
-            if pos[0] < 0 or pos[1] < 0 or pos[0] >= self.model.grid.width or pos[1] >= self.model.grid.height:
+            if step_pos[0] < 0 or step_pos[1] < 0 or step_pos[0] >= self.model.grid.width or step_pos[1] >= self.model.grid.height:
                 continue
                 
-            pos_cell_contents = self.model.grid.get_cell_list_contents(pos)
+            pos_cell_contents = self.model.grid.get_cell_list_contents(step_pos)
 
             next_road = None
             for content in pos_cell_contents:
@@ -92,11 +92,16 @@ class Car(Agent):
                 # Allow movement if:
                 # 1. Direction matches the road direction, or
                 # 2. It's a valid turn from current road to next road
-                move_direction = self.get_direction_from_coords(self.pos, pos)
+                move_direction = self.get_direction_from_coords(pos, step_pos)
                 
                 if (move_direction == next_road.direction or 
                     self.can_turn(current_road, next_road)):
-                    valid_steps.append(pos)
+                    valid_steps.append(step_pos)
+
+        return valid_steps
+
+    def move(self):
+        valid_steps = self.get_valid_neighborhood(self.pos)
 
         # Print direction for each valid step
         for step in valid_steps:
