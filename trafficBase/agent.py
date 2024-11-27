@@ -25,35 +25,29 @@ class Car(Agent):
         """
         Determine if a turn from current road to next road is valid.
         """
-        # Define valid turns and their required road directions
-        valid_turns = {
-            "Right": {
-                "Up": "Up",     
-                "Down": "Down"  
-            },
-            "Left": {
-                "Up": "Up",     
-                "Down": "Down"  
-            },
-            "Up": {
-                "Left": "Left",   
-                "Right": "Right" 
-            },
-            "Down": {
-                "Left": "Left",   
-                "Right": "Right"  
-            }
+        opposite_turns = {
+            "Right": "Left",
+            "Left": "Right",
+            "Up": "Down",
+            "Down": "Up"
         }
 
-        required_direction = self.get_direction_from_coords(self.pos, self.next_pos) # the direction the car needs to take to turn onto a road
-        direction_of_turned_road = next_road.direction # the direction of the road the car is turning onto
+        print(f"\nDebug can_turn:")
+        print(f"Current position: {self.pos}")
+        print(f"Next position: {next_road.pos}")
+        print(f"Current road direction: {current_road.direction}")
+        print(f"Next road direction: {next_road.direction}")
 
-        if current_road.direction in valid_turns:
-            allowed_turns = valid_turns[current_road.direction]
-            if required_direction in allowed_turns:
-                return direction_of_turned_road == allowed_turns[required_direction]
-            
-        return False
+        required_direction = self.get_direction_from_coords(self.pos, next_road.pos)
+        direction_of_turned_road = next_road.direction
+
+        print(f"Required direction based on positions: {required_direction}")
+        print(f"Direction of road being turned onto: {direction_of_turned_road}")
+
+        # Check if required direction is opposite to road direction
+        is_valid = direction_of_turned_road != opposite_turns.get(required_direction)
+        print(f"Turn is valid: {is_valid}")
+        return is_valid
 
     def move(self):
         possible_steps = self.model.grid.get_neighborhood(
