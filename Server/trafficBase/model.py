@@ -9,6 +9,15 @@ class CityModel(Model):
         dataDictionary = json.load(open("city_files/mapDictionary.json"))
         self.traffic_lights = []
 
+        # Define valid perpendicular turns based on the neighbor road's direction
+        # This ensures cars can turn into the destination
+        perpendicular_direction = {
+            "Up": "Left",     # If neighbor road points up, destination road points left (car can turn left)
+            "Down": "Right",  # If neighbor road points down, destination road points right (car can turn right)
+            "Left": "Up",     # If neighbor road points left, destination road points up (car can turn up)
+            "Right": "Down"   # If neighbor road points right, destination road points down (car can turn down)
+        }
+
         with open('city_files/2022_base.txt') as baseFile:
             lines = baseFile.readlines()
             self.width = len(lines[0])-1
@@ -17,7 +26,6 @@ class CityModel(Model):
             self.grid = MultiGrid(self.width, self.height, torus = False) 
             self.schedule = RandomActivation(self)
 
-            # Goes through each character in the map file and creates the corresponding agent.
             for r, row in enumerate(lines):
                 for c, col in enumerate(row):
                     if col in ["v", "^", ">", "<"]:
@@ -54,35 +62,45 @@ class CityModel(Model):
                         
                         print(f"\nChecking destination at position ({r}, {c})")
                         road_direction = None
+                        neighbor_direction = None
+                        neighbor_position = None
                         
-                        # Only look for road symbols, not obstacles
                         road_symbols = ["v", "^", ">", "<"]
                         
                         # Check above
                         if r > 0 and lines[r-1][c] in road_symbols:
                             print(f"Above cell contains: {lines[r-1][c]}")
-                            road_direction = dataDictionary[lines[r-1][c]]
-                            print(f"Found road above, direction: {road_direction}")
+                            neighbor_direction = dataDictionary[lines[r-1][c]]
+                            neighbor_position = "above"
+                            print(f"Found road above, direction: {neighbor_direction}")
                         
                         # Check below
                         elif r < len(lines)-1 and lines[r+1][c] in road_symbols:
                             print(f"Below cell contains: {lines[r+1][c]}")
-                            road_direction = dataDictionary[lines[r+1][c]]
-                            print(f"Found road below, direction: {road_direction}")
+                            neighbor_direction = dataDictionary[lines[r+1][c]]
+                            neighbor_position = "below"
+                            print(f"Found road below, direction: {neighbor_direction}")
                         
                         # Check left
                         elif c > 0 and lines[r][c-1] in road_symbols:
                             print(f"Left cell contains: {lines[r][c-1]}")
-                            road_direction = dataDictionary[lines[r][c-1]]
-                            print(f"Found road to left, direction: {road_direction}")
+                            neighbor_direction = dataDictionary[lines[r][c-1]]
+                            neighbor_position = "left"
+                            print(f"Found road to left, direction: {neighbor_direction}")
                         
                         # Check right
                         elif c < len(lines[r])-1 and lines[r][c+1] in road_symbols:
                             print(f"Right cell contains: {lines[r][c+1]}")
-                            road_direction = dataDictionary[lines[r][c+1]]
-                            print(f"Found road to right, direction: {road_direction}")
+                            neighbor_direction = dataDictionary[lines[r][c+1]]
+                            neighbor_position = "right"
+                            print(f"Found road to right, direction: {neighbor_direction}")
                                 
-                        if road_direction is None:
+                        if neighbor_direction:
+                            # Make road perpendicular in a way that allows cars to turn into it
+                            road_direction = perpendicular_direction[neighbor_direction]
+                            print(f"Setting perpendicular direction: {road_direction}")
+                            print(f"This allows cars traveling {neighbor_direction} to turn into the destination")
+                        else:
                             print("No adjacent roads found, defaulting to Right")
                             road_direction = "Right"
                         
