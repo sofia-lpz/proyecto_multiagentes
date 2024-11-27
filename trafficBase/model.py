@@ -35,10 +35,27 @@ class CityModel(Model):
                         self.grid.place_agent(agent, (c, self.height - r - 1))
 
                     elif col in ["S", "s"]:
+                        # Create traffic light
                         agent = Traffic_Light(f"tl_{r*self.width+c}", self, False if col == "S" else True, int(dataDictionary[col]))
                         self.grid.place_agent(agent, (c, self.height - r - 1))
                         self.schedule.add(agent)
                         self.traffic_lights.append(agent)
+                        
+                        # Find road direction by checking neighboring cells
+                        road_direction = None
+                        if r > 0 and lines[r-1][c] in ["v", "^"]:
+                            road_direction = "Up" if lines[r-1][c] == "^" else "Down"
+                        elif r < len(lines)-1 and lines[r+1][c] in ["v", "^"]:
+                            road_direction = "Up" if lines[r+1][c] == "^" else "Down"
+                        elif c > 0 and lines[r][c-1] in [">", "<"]:
+                            road_direction = "Right" if lines[r][c-1] == ">" else "Left"
+                        elif c < len(lines[r])-1 and lines[r][c+1] in [">", "<"]:
+                            road_direction = "Right" if lines[r][c+1] == ">" else "Left"
+                        
+                        # Create road under traffic light
+                        if road_direction:
+                            road = Road(f"r_{r*self.width+c}", self, road_direction)
+                            self.grid.place_agent(road, (c, self.height - r - 1))
 
                     elif col == "#":
                         agent = Obstacle(f"ob_{r*self.width+c}", self)
