@@ -4,38 +4,67 @@ class Car(Agent):
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
         self.next_pos = None
-    
+
     def move(self):
         possible_steps = self.model.grid.get_neighborhood(
             self.pos,
-            moore=False,  # Only consider von Neumann neighborhood
+            moore=False,
             include_center=False
         )
         
-        # Filter for valid road cells
         valid_steps = []
         for pos in possible_steps:
+            # Skip if position is out of grid bounds
+            if pos[0] < 0 or pos[1] < 0 or pos[0] >= self.model.grid.width or pos[1] >= self.model.grid.height:
+                continue
+                
             cell_contents = self.model.grid.get_cell_list_contents(pos)
-            # Check for road and direction
+            
+            # Look for a road in the cell contents first
+            road = None
             for content in cell_contents:
                 if isinstance(content, Road):
-                    if content.direction == "Right" and pos[0] > self.pos[0]:
-                        valid_steps.append(pos)
-                    elif content.direction == "Left" and pos[0] < self.pos[0]:
-                        valid_steps.append(pos)
-                    elif content.direction == "Up" and pos[1] > self.pos[1]:
-                        valid_steps.append(pos)
-                    elif content.direction == "Down" and pos[1] < self.pos[1]:
-                        valid_steps.append(pos)
-        
+                    road = content
+                    print(f"Road: {road.direction}")
+                    break
+            
+            if road:
+                # Check for traffic light
+                traffic_light = None
+                for content in cell_contents:
+                    if isinstance(content, Traffic_Light):
+                        traffic_light = content
+                        break
+                
+                # Only skip if there's a red light
+                # If no traffic light or green light, continue checking direction
+                if traffic_light and not traffic_light.state:
+                    print("Red light")
+                    continue
+                elif traffic_light and traffic_light.state:
+                    print("Green light")
+                    
+                # Check direction matches movement
+                dx = pos[0] - self.pos[0]
+                dy = pos[1] - self.pos[1]
+                
+                if ((road.direction == "Right" and dx > 0) or
+                    (road.direction == "Left" and dx < 0) or
+                    (road.direction == "Up" and dy > 0) or
+                    (road.direction == "Down" and dy < 0)):
+                    valid_steps.append(pos)
+
         if valid_steps:
-            # Choose a random valid step
             self.next_pos = self.random.choice(valid_steps)
             
-            # Check if next position is empty
-            if self.model.grid.is_cell_empty(self.next_pos):
+            # Get all agents in the next position
+            next_pos_contents = self.model.grid.get_cell_list_contents(self.next_pos)
+            
+            # Check if there are no cars in the next position
+            cars = [agent for agent in next_pos_contents if isinstance(agent, Car)]
+            if not cars:
                 self.model.grid.move_agent(self, self.next_pos)
-    
+
     def step(self):
         self.move()
 
