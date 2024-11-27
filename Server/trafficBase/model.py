@@ -9,16 +9,15 @@ class CityModel(Model):
         dataDictionary = json.load(open("city_files/mapDictionary.json"))
         self.traffic_lights = []
 
-        # Define valid perpendicular turns based on the neighbor road's direction
-        # This ensures cars can turn into the destination
-        perpendicular_direction = {
-            "Up": "Left",     # If neighbor road points up, destination road points left (car can turn left)
-            "Down": "Right",  # If neighbor road points down, destination road points right (car can turn right)
-            "Left": "Up",     # If neighbor road points left, destination road points up (car can turn up)
-            "Right": "Down"   # If neighbor road points right, destination road points down (car can turn down)
+        # Define valid road directions based on neighbor position
+        neighbor_to_road_direction = {
+            "above": "Down",  # If neighbor is above, road should point down
+            "below": "Up",    # If neighbor is below, road should point up
+            "left": "Right",  # If neighbor is left, road should point right
+            "right": "Left"   # If neighbor is right, road should point left
         }
 
-        with open('city_files/2022_base.txt') as baseFile:
+        with open('city_files/2023_base.txt') as baseFile:
             lines = baseFile.readlines()
             self.width = len(lines[0])-1
             self.height = len(lines)
@@ -60,51 +59,23 @@ class CityModel(Model):
                         agent = Destination(f"d_{r*self.width+c}", self)
                         self.grid.place_agent(agent, (c, self.height - r - 1))
                         
-                        print(f"\nChecking destination at position ({r}, {c})")
-                        road_direction = None
-                        neighbor_direction = None
-                        neighbor_position = None
-                        
+                        road_direction = "Right"  # Default direction
                         road_symbols = ["v", "^", ">", "<"]
                         
-                        # Check above
-                        if r > 0 and lines[r-1][c] in road_symbols:
-                            print(f"Above cell contains: {lines[r-1][c]}")
-                            neighbor_direction = dataDictionary[lines[r-1][c]]
-                            neighbor_position = "above"
-                            print(f"Found road above, direction: {neighbor_direction}")
+                        # Check all neighboring cells
+                        neighbors = {
+                            "above": (r > 0, r-1, c, lines[r-1][c] if r > 0 else None),
+                            "below": (r < len(lines)-1, r+1, c, lines[r+1][c] if r < len(lines)-1 else None),
+                            "left": (c > 0, r, c-1, lines[r][c-1] if c > 0 else None),
+                            "right": (c < len(lines[r])-1, r, c+1, lines[r][c+1] if c < len(lines[r])-1 else None)
+                        }
                         
-                        # Check below
-                        elif r < len(lines)-1 and lines[r+1][c] in road_symbols:
-                            print(f"Below cell contains: {lines[r+1][c]}")
-                            neighbor_direction = dataDictionary[lines[r+1][c]]
-                            neighbor_position = "below"
-                            print(f"Found road below, direction: {neighbor_direction}")
-                        
-                        # Check left
-                        elif c > 0 and lines[r][c-1] in road_symbols:
-                            print(f"Left cell contains: {lines[r][c-1]}")
-                            neighbor_direction = dataDictionary[lines[r][c-1]]
-                            neighbor_position = "left"
-                            print(f"Found road to left, direction: {neighbor_direction}")
-                        
-                        # Check right
-                        elif c < len(lines[r])-1 and lines[r][c+1] in road_symbols:
-                            print(f"Right cell contains: {lines[r][c+1]}")
-                            neighbor_direction = dataDictionary[lines[r][c+1]]
-                            neighbor_position = "right"
-                            print(f"Found road to right, direction: {neighbor_direction}")
-                                
-                        if neighbor_direction:
-                            # Make road perpendicular in a way that allows cars to turn into it
-                            road_direction = perpendicular_direction[neighbor_direction]
-                            print(f"Setting perpendicular direction: {road_direction}")
-                            print(f"This allows cars traveling {neighbor_direction} to turn into the destination")
-                        else:
-                            print("No adjacent roads found, defaulting to Right")
-                            road_direction = "Right"
-                        
-                        print(f"Final road direction: {road_direction}")
+                        # Find first valid neighbor with a road
+                        for position, (is_valid, nr, nc, symbol) in neighbors.items():
+                            if is_valid and symbol in road_symbols:
+                                road_direction = neighbor_to_road_direction[position]
+                                print(f"Found road at {position}, setting direction to {road_direction}")
+                                break
                         
                         road = Road(f"r_{r*self.width+c}", self, road_direction)
                         self.grid.place_agent(road, (c, self.height - r - 1))
