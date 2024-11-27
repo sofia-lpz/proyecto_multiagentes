@@ -30,8 +30,8 @@ def agent_portrayal(agent):
     
     if (isinstance(agent, Destination)):
         portrayal["Shape"] = "circle"
-        portrayal["Color"] = "lightgreen"
-        portrayal["Layer"] = 0
+        portrayal["Color"] = "rgba(255,255,0,0.6)"  # Yellow with 0.6 transparency
+        portrayal["Layer"] = 2
         portrayal["r"] = 0.8
 
 

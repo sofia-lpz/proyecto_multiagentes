@@ -1,25 +1,23 @@
 from mesa import Model
 from mesa.time import RandomActivation
 from mesa.space import MultiGrid
-from .agent import *
+from agent import *
 import json
 
 class CityModel(Model):
-    """ 
-        Creates a model based on a city map.
-
-        Args:
-            N: Number of agents in the simulation
-    """
     def __init__(self, N):
-
-        # Load the map dictionary. The dictionary maps the characters in the map file to the corresponding agent.
         dataDictionary = json.load(open("city_files/mapDictionary.json"))
-
         self.traffic_lights = []
 
-        # Load the map file. The map file is a text file where each character represents an agent.
-        with open('city_files/2022_base.txt') as baseFile:
+        # Define valid road directions based on neighbor position
+        neighbor_to_road_direction = {
+            "above": "Down",  # If neighbor is above, road should point down
+            "below": "Up",    # If neighbor is below, road should point up
+            "left": "Right",  # If neighbor is left, road should point right
+            "right": "Left"   # If neighbor is right, road should point left
+        }
+
+        with open('city_files/2023_base.txt') as baseFile:
             lines = baseFile.readlines()
             self.width = len(lines[0])-1
             self.height = len(lines)
@@ -27,7 +25,6 @@ class CityModel(Model):
             self.grid = MultiGrid(self.width, self.height, torus = False) 
             self.schedule = RandomActivation(self)
 
-            # Goes through each character in the map file and creates the corresponding agent.
             for r, row in enumerate(lines):
                 for c, col in enumerate(row):
                     if col in ["v", "^", ">", "<"]:
@@ -35,24 +32,21 @@ class CityModel(Model):
                         self.grid.place_agent(agent, (c, self.height - r - 1))
 
                     elif col in ["S", "s"]:
-                        # Create traffic light
                         agent = Traffic_Light(f"tl_{r*self.width+c}", self, False if col == "S" else True, int(dataDictionary[col]))
                         self.grid.place_agent(agent, (c, self.height - r - 1))
                         self.schedule.add(agent)
                         self.traffic_lights.append(agent)
                         
-                        # Find road direction by checking neighboring cells
                         road_direction = None
                         if r > 0 and lines[r-1][c] in ["v", "^"]:
-                            road_direction = "Up" if lines[r-1][c] == "^" else "Down"
+                            road_direction = dataDictionary[lines[r-1][c]]
                         elif r < len(lines)-1 and lines[r+1][c] in ["v", "^"]:
-                            road_direction = "Up" if lines[r+1][c] == "^" else "Down"
+                            road_direction = dataDictionary[lines[r+1][c]]
                         elif c > 0 and lines[r][c-1] in [">", "<"]:
-                            road_direction = "Right" if lines[r][c-1] == ">" else "Left"
+                            road_direction = dataDictionary[lines[r][c-1]]
                         elif c < len(lines[r])-1 and lines[r][c+1] in [">", "<"]:
-                            road_direction = "Right" if lines[r][c+1] == ">" else "Left"
+                            road_direction = dataDictionary[lines[r][c+1]]
                         
-                        # Create road under traffic light
                         if road_direction:
                             road = Road(f"r_{r*self.width+c}", self, road_direction)
                             self.grid.place_agent(road, (c, self.height - r - 1))
@@ -64,28 +58,42 @@ class CityModel(Model):
                     elif col == "D":
                         agent = Destination(f"d_{r*self.width+c}", self)
                         self.grid.place_agent(agent, (c, self.height - r - 1))
+                        
+                        road_direction = "Right"  # Default direction
+                        road_symbols = ["v", "^", ">", "<"]
+                        
+                        # Check all neighboring cells
+                        neighbors = {
+                            "above": (r > 0, r-1, c, lines[r-1][c] if r > 0 else None),
+                            "below": (r < len(lines)-1, r+1, c, lines[r+1][c] if r < len(lines)-1 else None),
+                            "left": (c > 0, r, c-1, lines[r][c-1] if c > 0 else None),
+                            "right": (c < len(lines[r])-1, r, c+1, lines[r][c+1] if c < len(lines[r])-1 else None)
+                        }
+                        
+                        # Find first valid neighbor with a road
+                        for position, (is_valid, nr, nc, symbol) in neighbors.items():
+                            if is_valid and symbol in road_symbols:
+                                road_direction = neighbor_to_road_direction[position]
+                                break
+                        
+                        road = Road(f"r_{r*self.width+c}", self, road_direction)
+                        self.grid.place_agent(road, (c, self.height - r - 1))
 
         self.num_agents = N
         self.running = True
 
-        # First get all destinations from the grid
         destinations = []
         for cell in self.grid.coord_iter():
-            cell_content = cell[0]  # cell is a tuple of (content, x, y)
+            cell_content = cell[0]
             for agent in cell_content:
                 if isinstance(agent, Destination):
                     destinations.append(agent)
 
-
-        if destinations:  # Make sure there are destinations
-            # Pick a random destination
+        if destinations:
             destination = self.random.choice(destinations)
-            
-            # Create car with destination
             car = Car(f"car_0", self, destination)
             self.grid.place_agent(car, (0, 0))
             self.schedule.add(car)
 
     def step(self):
-        '''Advance the model by one step.'''
         self.schedule.step()
