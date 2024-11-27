@@ -17,7 +17,7 @@ class CityModel(Model):
             "right": "Left"   # If neighbor is right, road should point left
         }
 
-        with open('city_files/2023_base.txt') as baseFile:
+        with open('city_files/2024_base.txt') as baseFile:
             lines = baseFile.readlines()
             self.width = len(lines[0])-1
             self.height = len(lines)
@@ -90,10 +90,27 @@ class CityModel(Model):
                     destinations.append(agent)
 
         if destinations:
+            # First car
             destination = self.random.choice(destinations)
             car = Car(f"car_0", self, destination)
             self.grid.place_agent(car, (0, 0))
             self.schedule.add(car)
+            
+            # Second car with a different destination
+            remaining_destinations = [d for d in destinations if d != destination]
+            if remaining_destinations:
+                destination2 = self.random.choice(remaining_destinations)
+                car2 = Car(f"car_1", self, destination2)
+                self.grid.place_agent(car2, (0, 1))
+                self.schedule.add(car2)
 
+            # Third car with a different destination
+            remaining_destinations = [d for d in destinations if d != destination and d != destination2]
+            if remaining_destinations:
+                destination3 = self.random.choice(remaining_destinations)
+                car3 = Car(f"car_2", self, destination3)
+                self.grid.place_agent(car3, (0, 2))
+                self.schedule.add(car3)
+            
     def step(self):
         self.schedule.step()
