@@ -1,9 +1,37 @@
 from mesa import Agent
 
 class Car(Agent):
-    def __init__(self, unique_id, model):
+    def get_direction_from_coords(self, current_pos, next_pos):
+        dx = next_pos[0] - current_pos[0]
+        dy = next_pos[1] - current_pos[1]
+        
+        if dx > 0:
+            return "Right"
+        elif dx < 0:
+            return "Left"
+        elif dy > 0:
+            return "Up"
+        elif dy < 0:
+            return "Down"
+        return "None"
+
+    def __init__(self, unique_id, model, Destination):
         super().__init__(unique_id, model)
         self.next_pos = None
+        self.destination = Destination
+        self.current_direction = None  # Track current direction of travel
+
+    def can_turn(self, current_road, next_road):
+        """
+        Determine if a turn from current road to next road is valid
+        """
+        valid_turns = {
+            "Right": ["Up", "Down"],
+            "Left": ["Up", "Down"],
+            "Up": ["Left", "Right"],
+            "Down": ["Left", "Right"]
+        }
+        return next_road.direction in valid_turns.get(current_road.direction, [])
 
     def move(self):
         possible_steps = self.model.grid.get_neighborhood(
@@ -14,13 +42,16 @@ class Car(Agent):
         
         valid_steps = []
 
+        # Get current road
         current_cell_contents = self.model.grid.get_cell_list_contents(self.pos)
-
         current_road = None
         for content in current_cell_contents:
             if isinstance(content, Road):
                 current_road = content
                 break
+
+        if not current_road:
+            return
 
         for pos in possible_steps:
             # Skip if position is out of grid bounds
@@ -29,13 +60,14 @@ class Car(Agent):
                 
             pos_cell_contents = self.model.grid.get_cell_list_contents(pos)
 
-            road = None
+            next_road = None
             for content in pos_cell_contents:
                 if isinstance(content, Road):
-                    road = content
+                    next_road = content
                     break
             
-            if road:
+            if next_road:
+                # Check traffic light
                 traffic_light = None
                 for content in pos_cell_contents:
                     if isinstance(content, Traffic_Light):
@@ -43,36 +75,35 @@ class Car(Agent):
                         break
 
                 if traffic_light and not traffic_light.state:
-                    print("Red light")
                     continue
-                elif traffic_light and traffic_light.state:
-                    print("Green light")
-                    
-                # Check direction matches movement
-                # hypothetical direction of the car if pos is picked.
-                dx = pos[0] - self.pos[0]
-                dy = pos[1] - self.pos[1]
+
+                # Allow movement if:
+                # 1. Direction matches the road direction, or
+                # 2. It's a valid turn from current road to next road
+                move_direction = self.get_direction_from_coords(self.pos, pos)
                 
-                if ((road.direction == "Right" and dx > 0) or
-                    (road.direction == "Left" and dx < 0) or
-                    (road.direction == "Up" and dy > 0) or
-                    (road.direction == "Down" and dy < 0)):
+                if (move_direction == next_road.direction or 
+                    self.can_turn(current_road, next_road)):
                     valid_steps.append(pos)
 
         if valid_steps:
+            # TODO: Add logic to choose best step towards destination
             self.next_pos = self.random.choice(valid_steps)
             
-            # Get all agents in the next position
             next_pos_contents = self.model.grid.get_cell_list_contents(self.next_pos)
             
-            # Check if there are no cars in the next position
+            # Check for cars and obstacles
             cars = [agent for agent in next_pos_contents if isinstance(agent, Car)]
             obstacles = [agent for agent in next_pos_contents if isinstance(agent, Obstacle)]
+            
             if not cars and not obstacles:
+                # Update current direction based on movement
+                self.current_direction = self.get_direction_from_coords(self.pos, self.next_pos)
                 self.model.grid.move_agent(self, self.next_pos)
 
     def step(self):
         self.move()
+
 
 class Traffic_Light(Agent):
     """

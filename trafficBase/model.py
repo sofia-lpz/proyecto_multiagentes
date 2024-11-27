@@ -68,9 +68,23 @@ class CityModel(Model):
         self.num_agents = N
         self.running = True
 
-        car = Car(f"car_0", self)
-        self.grid.place_agent(car, (0, 0))
-        self.schedule.add(car)
+        # First get all destinations from the grid
+        destinations = []
+        for cell in self.grid.coord_iter():
+            cell_content = cell[0]  # cell is a tuple of (content, x, y)
+            for agent in cell_content:
+                if isinstance(agent, Destination):
+                    destinations.append(agent)
+
+
+        if destinations:  # Make sure there are destinations
+            # Pick a random destination
+            destination = self.random.choice(destinations)
+            
+            # Create car with destination
+            car = Car(f"car_0", self, destination)
+            self.grid.place_agent(car, (0, 0))
+            self.schedule.add(car)
 
     def step(self):
         '''Advance the model by one step.'''
