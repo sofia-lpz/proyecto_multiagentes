@@ -86,7 +86,7 @@ class Car(Agent):
         """Get valid neighboring positions around a given position."""
         neighbors = self.model.grid.get_neighborhood(
             pos,
-            moore=False,  # Use von Neumann neighborhood
+            moore=True,  # Use von Neumann neighborhood
             include_center=False
         )
         valid_neighbors = []
@@ -225,26 +225,78 @@ class Car(Agent):
         self.move()
 
 class Traffic_Light(Agent):
-    """
-    Traffic light. Where the traffic lights are in the grid.
-    """
-    def __init__(self, unique_id, model, state = False, timeToChange = 10):
+    def __init__(self, unique_id, model, state = False, timeToChange = 10, direction = "horizontal"):
         super().__init__(unique_id, model)
-        """
-        Creates a new Traffic light.
-        Args:
-            unique_id: The agent's ID
-            model: Model reference for the agent
-            state: Whether the traffic light is green or red
-            timeToChange: After how many step should the traffic light change color 
-        """
         self.state = state
         self.timeToChange = timeToChange
+        self.direction = direction
+
+    def get_neighbor_traffic_lights(self):
+        """Get immediately adjacent traffic lights."""
+        neighbors = []
+        x, y = self.pos
+        print(f"Traffic Light {self.unique_id} at ({x},{y}) direction:{self.direction} searching for neighbors")
+        
+        # Check all adjacent cells
+        for dx, dy in [(0,1), (0,-1), (1,0), (-1,0)]:
+            new_x, new_y = x + dx, y + dy
+            if (0 <= new_x < self.model.grid.width and 
+                0 <= new_y < self.model.grid.height):
+                cell_contents = self.model.grid.get_cell_list_contents((new_x, new_y))
+                for content in cell_contents:
+                    if isinstance(content, Traffic_Light):
+                        neighbors.append(content)
+                        print(f"-> Found neighbor {content.unique_id} at ({new_x},{new_y}) direction:{content.direction}")
+        
+        if not neighbors:
+            print(f"-> No neighbors found for light {self.unique_id}")
+        return neighbors
+
+    def get_opposite_traffic_lights(self):
+        """Get traffic lights that should operate in opposition."""
+        opposite_lights = set()
+        x, y = self.pos
+        print(f"\nFinding opposite lights for {self.unique_id} at ({x},{y}) direction:{self.direction}")
+        
+        # Check all 8 directions (Moore neighborhood)
+        neighbors = []
+        for dx, dy in [(0,1), (1,1), (1,0), (1,-1), (0,-1), (-1,-1), (-1,0), (-1,1)]:
+            new_x, new_y = x + dx, y + dy
+            if (0 <= new_x < self.model.grid.width and 
+                0 <= new_y < self.model.grid.height):
+                cell_contents = self.model.grid.get_cell_list_contents((new_x, new_y))
+                for content in cell_contents:
+                    if isinstance(content, Traffic_Light):
+                        neighbors.append(content)
+                        print(f"-> Found neighbor {content.unique_id} at ({new_x},{new_y}) direction:{content.direction}")
+        
+        print(f"-> Found {len(neighbors)} immediate neighbors")
+        
+        # For each neighbor
+        for neighbor in neighbors:
+            nx, ny = neighbor.pos
+            # Only consider neighbors with same direction
+            if neighbor.direction == self.direction:
+                print(f"-> Checking neighbor {neighbor.unique_id} at ({nx},{ny}) with same direction")
+                # Get their Moore neighbors
+                for dx, dy in [(0,1), (1,1), (1,0), (1,-1), (0,-1), (-1,-1), (-1,0), (-1,1)]:
+                    sx, sy = nx + dx, ny + dy
+                    if (0 <= sx < self.model.grid.width and 
+                        0 <= sy < self.model.grid.height):
+                        cell_contents = self.model.grid.get_cell_list_contents((sx, sy))
+                        for content in cell_contents:
+                            if isinstance(content, Traffic_Light) and content.direction != self.direction:
+                                print(f"--> Found opposite light {content.unique_id} at ({sx},{sy}) direction:{content.direction}")
+                                opposite_lights.add(content)
+        
+        if not opposite_lights:
+            print(f"-> No opposite lights found for {self.unique_id}")
+        
+        return list(opposite_lights)
 
     def step(self):
-        """ 
-        To change the state (green or red) of the traffic light in case you consider the time to change of each traffic light.
-        """
+        self.get_neighbor_traffic_lights()
+        self.get_opposite_traffic_lights()
         if self.model.schedule.steps % self.timeToChange == 0:
             self.state = not self.state
 

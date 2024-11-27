@@ -35,7 +35,7 @@ class CityModel(Model):
                         self.grid.place_agent(agent, (c, self.height - r - 1))
 
                     elif col in ["S", "s"]:
-                        agent = Traffic_Light(f"tl_{r*self.width+c}", self, False if col == "S" else True, int(dataDictionary[col]))
+                        agent = Traffic_Light(f"tl_{r*self.width+c}", self, False if col == "S" else True, int(dataDictionary[col]), "vertical" if col == "S" else "horizontal")
                         self.grid.place_agent(agent, (c, self.height - r - 1))
                         self.schedule.add(agent)
                         self.traffic_lights.append(agent)
@@ -98,9 +98,16 @@ class CityModel(Model):
             for agent in cell_content:
                 if isinstance(agent, Destination):
                     destinations.append(agent)
+
+        destination = self.random.choice(self.destinations)
+        car0 = Car(f"car_{self.car_count}", self, destination)
+        self.grid.place_agent(car0, (0, 0))
+        self.schedule.add(car0)
+        self.car_count += 1
             
     def step(self):
         # Spawn cars every 2 steps
+        """
         if self.schedule.steps % 10 == 0 and self.destinations:
             corners = [
                 (0, 0),                    # Bottom left
@@ -118,5 +125,6 @@ class CityModel(Model):
                     self.grid.place_agent(car, corner)
                     self.schedule.add(car)
                     self.car_count += 1
-        
+        """
+
         self.schedule.step()
