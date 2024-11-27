@@ -32,19 +32,9 @@ class Car(Agent):
             "Down": "Up"
         }
 
-        print(f"\nDebug can_turn:")
-        print(f"Current position: {self.pos}")
-        print(f"Next position: {next_road.pos}")
-        print(f"Current road direction: {current_road.direction}")
-        print(f"Next road direction: {next_road.direction}")
-
         required_direction = self.get_direction_from_coords(self.pos, next_road.pos)
         direction_of_turned_road = next_road.direction
 
-        print(f"Required direction based on positions: {required_direction}")
-        print(f"Direction of road being turned onto: {direction_of_turned_road}")
-
-        # Check if required direction is opposite to road direction
         is_valid = direction_of_turned_road != opposite_turns.get(required_direction) and required_direction != opposite_turns.get(current_road.direction)
         print(f"Turn is valid: {is_valid}")
         return is_valid
