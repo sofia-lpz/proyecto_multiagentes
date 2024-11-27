@@ -103,5 +103,14 @@ class CityModel(Model):
                 car2 = Car(f"car_1", self, destination2)
                 self.grid.place_agent(car2, (0, 1))
                 self.schedule.add(car2)
+
+            # Third car with a different destination
+            remaining_destinations = [d for d in destinations if d != destination and d != destination2]
+            if remaining_destinations:
+                destination3 = self.random.choice(remaining_destinations)
+                car3 = Car(f"car_2", self, destination3)
+                self.grid.place_agent(car3, (0, 2))
+                self.schedule.add(car3)
+            
     def step(self):
         self.schedule.step()
