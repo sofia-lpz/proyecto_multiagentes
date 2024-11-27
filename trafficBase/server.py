@@ -10,20 +10,34 @@ def agent_portrayal(agent):
                  "Filled": "true",
                  "Layer": 1,
                  "w": 1,
-                 "h": 1
+                 "h": 1,
+                 "text_color": "black",  # Add text color
+                 "text": ""  # Initialize text field
                  }
 
     if (isinstance(agent, Road)):
         portrayal["Color"] = "grey"
         portrayal["Layer"] = 0
+        # Add direction indicator
+        direction_symbols = {
+            "Right": "→",
+            "Left": "←",
+            "Up": "↑",
+            "Down": "↓"
+        }
+        portrayal["text"] = direction_symbols.get(agent.direction, "")
+        portrayal["text_color"] = "black"  # Make sure text is visible against grey
     
     if (isinstance(agent, Destination)):
+        portrayal["Shape"] = "circle"
         portrayal["Color"] = "lightgreen"
         portrayal["Layer"] = 0
+        portrayal["r"] = 0.8
+
 
     if (isinstance(agent, Traffic_Light)):
         portrayal["Shape"] = "circle"
-        portrayal["Color"] = "red" if not agent.state else "green"
+        portrayal["Color"] = "rgba(255,0,0,0.6)" if not agent.state else "rgba(0,255,0,0.6)"
         portrayal["Layer"] = 2
         portrayal["w"] = 0.8
         portrayal["h"] = 0.8
