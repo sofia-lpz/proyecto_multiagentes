@@ -45,7 +45,7 @@ class Car(Agent):
         print(f"Direction of road being turned onto: {direction_of_turned_road}")
 
         # Check if required direction is opposite to road direction
-        is_valid = direction_of_turned_road != opposite_turns.get(required_direction)
+        is_valid = direction_of_turned_road != opposite_turns.get(required_direction) and required_direction != opposite_turns.get(current_road.direction)
         print(f"Turn is valid: {is_valid}")
         return is_valid
 
