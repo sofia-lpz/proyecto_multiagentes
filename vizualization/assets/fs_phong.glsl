@@ -16,8 +16,8 @@ uniform vec4 u_diffuseLight;
 uniform vec4 u_specularLight;
 uniform float u_emissiveFactor;
 uniform vec3 u_lightWorldPosition;
-uniform vec3 u_sphereLightPositions[10];
-uniform vec4 u_sphereLightColors[10];
+uniform vec3 u_sphereLightPositions[28];
+uniform vec4 u_sphereLightColors[28];
 uniform int u_numSphereLights;
 
 out vec4 outColor;

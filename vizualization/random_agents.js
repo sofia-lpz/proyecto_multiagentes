@@ -713,7 +713,7 @@ function drawMapObjects(gl, programInfo, mapObjects, viewProjectionMatrix) {
   // Collect sphere light information
   const sphereLights = mapObjects
       .filter(obj => obj.type === 'sphere')
-      .slice(0, 10)  // Limit to 10 lights maximum
+      .slice(0, 28)  // Limit to 10 lights maximum
       .map(sphere => ({
           position: sphere.object.position,
           color: sphere.arrays.a_emissiveColor.data.slice(0, 4)  // Get the first color (they're all the same)

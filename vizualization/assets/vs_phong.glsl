@@ -12,8 +12,8 @@ in float a_shininess;
 
 uniform vec3 u_viewWorldPosition;
 uniform vec3 u_lightWorldPosition;
-uniform vec3 u_sphereLightPositions[10];  // Array for sphere light positions
-uniform vec4 u_sphereLightColors[10];     // Array for sphere light colors
+uniform vec3 u_sphereLightPositions[28];  // Array for sphere light positions
+uniform vec4 u_sphereLightColors[28];     // Array for sphere light colors
 uniform int u_numSphereLights;            // Number of active sphere lights
 
 uniform mat4 u_world;
