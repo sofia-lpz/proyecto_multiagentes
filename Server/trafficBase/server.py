@@ -88,10 +88,14 @@ print(width, height)
 grid = CanvasGrid(agent_portrayal, width, height, 500, 500)
 car_info = CarInfoElement()
 
+chart = ChartModule([
+    {"Label": "Average Completed Cars", "Color": "green"}
+], data_collector_name='datacollector')
+
 # Update server definition to use text display instead of charts
 server = ModularServer(
     CityModel,
-    [grid, car_info],  # Add text element instead of charts
+    [grid, car_info, chart],  # Add text element instead of charts
     "Traffic Base",
     model_params
 )

@@ -14,11 +14,13 @@ class CityModel(Model):
         self.car_count = 0
         self.cars_completed = 0
         self.destinations = []
+        self.total_episodes = 0
 
         self.datacollector = DataCollector(
             model_reporters={
                 "Active Cars": lambda m: len([a for a in m.schedule.agents if isinstance(a, Car)]),
-                "Completed Cars": lambda m: m.cars_completed
+                "Completed Cars": lambda m: m.cars_completed,
+                "Average Completed Cars": lambda m: m.cars_completed / m.total_episodes
             }
         )
         
@@ -120,7 +122,7 @@ class CityModel(Model):
     def step(self):
         cars_spawned = False
         # Spawn cars every 2 steps
-        if self.schedule.steps % 2 == 0 and self.destinations:
+        if self.schedule.steps % 1 == 0 and self.destinations:
             corners = [
                 (0, 0),                    # Bottom left
                 (0, self.height-1),        # Top left
@@ -140,9 +142,10 @@ class CityModel(Model):
                     cars_spawned = True
 
         # stop if cars are not spawned when they should, every two steps
-        if not cars_spawned and self.schedule.steps % 2 == 0:
+        if not cars_spawned and self.schedule.steps % 1 == 0:
             self.running = False
             return
-
+        
+        self.total_episodes += 1
         self.datacollector.collect(self)  # Collect data
         self.schedule.step()
