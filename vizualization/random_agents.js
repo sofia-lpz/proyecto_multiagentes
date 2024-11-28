@@ -60,7 +60,7 @@ async function main() {
         agentModelData = await loadModelData(
             '/assets/models/Car.obj',  // path to your OBJ file
             '/assets/models/Car.mtl',  // path to your MTL file
-            0.5  // scale factor for the model
+            0.3  // scale factor for the model
         );
     } catch (error) {
         console.error('Failed to load agent model:', error);
@@ -1016,9 +1016,7 @@ function parseOBJ(objText) {
     // First pass: collect all vertices
     for (const line of lines) {
         const parts = line.trim().split(/\s+/);
-        if (parts.length === 0 || parts[0].startsWith('#')) continue;
-        
-        const command = parts[0].toLowerCase();
+        const command = parts[0];
         
         switch (command) {
             case 'v':  // Vertex position
@@ -1032,7 +1030,7 @@ function parseOBJ(objText) {
             case 'vt':  // Texture coordinates
                 origTexcoords.push(
                     parseFloat(parts[1]),
-                    parts.length > 2 ? parseFloat(parts[2]) : 0.0
+                    parseFloat(parts[2])
                 );
                 break;
                 
@@ -1046,62 +1044,73 @@ function parseOBJ(objText) {
         }
     }
 
+    // Create a vertex cache to handle vertex reuse
+    const vertexCache = new Map();
+    let vertexCount = 0;
+
     // Second pass: process faces and materials
     for (const line of lines) {
         const parts = line.trim().split(/\s+/);
         const command = parts[0];
 
         if (command === 'usemtl') {
-            // Convert material name to index
             const materialName = parts[1];
             if (!materialNameToIndex.has(materialName)) {
-                console.log('Adding new material:', materialName, 'with index:', materialIndexCounter);
                 materialNameToIndex.set(materialName, materialIndexCounter++);
             }
             currentMaterialIndex = materialNameToIndex.get(materialName);
-            console.log('Switched to material:', materialName, 'index:', currentMaterialIndex);
         }
         else if (command === 'f') {
-            // Process face
-            for (let i = 1; i <= 3; i++) {
-                const vertexData = parts[i].split('/');
+            // Handle faces with more than 3 vertices by triangulating
+            const faceVertices = parts.slice(1);
+            
+            // Triangulate the face if it has more than 3 vertices
+            for (let i = 1; i < faceVertices.length - 1; i++) {
+                const vertexData = [faceVertices[0], faceVertices[i], faceVertices[i + 1]];
                 
-                // Indices in OBJ files start at 1, so subtract 1
-                const positionIdx = parseInt(vertexData[0]) - 1;
-                const texcoordIdx = vertexData[1] ? parseInt(vertexData[1]) - 1 : -1;
-                const normalIdx = vertexData[2] ? parseInt(vertexData[2]) - 1 : -1;
-                
-                // Add the vertex data
-                positions.push(
-                    origPositions[positionIdx * 3],
-                    origPositions[positionIdx * 3 + 1],
-                    origPositions[positionIdx * 3 + 2]
-                );
-                
-                if (texcoordIdx >= 0) {
-                    texcoords.push(
-                        origTexcoords[texcoordIdx * 2],
-                        origTexcoords[texcoordIdx * 2 + 1]
-                    );
-                }
-                
-                if (normalIdx >= 0) {
-                    normals.push(
-                        origNormals[normalIdx * 3],
-                        origNormals[normalIdx * 3 + 1],
-                        origNormals[normalIdx * 3 + 2]
-                    );
-                }
-                
-                // Add vertex index and material index
-                indices.push(indices.length);
-                materialIndices.push(currentMaterialIndex);
+                // Process each vertex of the triangle
+                vertexData.forEach(vertex => {
+                    // Create a unique key for the vertex combination
+                    const vertexKey = vertex;
+                    
+                    if (!vertexCache.has(vertexKey)) {
+                        // Parse vertex indices
+                        const [posIndex, texIndex, normIndex] = vertex.split('/').map(v => parseInt(v) || 0);
+                        
+                        // Add vertex data (adjust indices to be 0-based)
+                        if (posIndex > 0) {
+                            positions.push(
+                                origPositions[(posIndex - 1) * 3],
+                                origPositions[(posIndex - 1) * 3 + 1],
+                                origPositions[(posIndex - 1) * 3 + 2]
+                            );
+                        }
+                        
+                        if (texIndex > 0) {
+                            texcoords.push(
+                                origTexcoords[(texIndex - 1) * 2],
+                                origTexcoords[(texIndex - 1) * 2 + 1]
+                            );
+                        }
+                        
+                        if (normIndex > 0) {
+                            normals.push(
+                                origNormals[(normIndex - 1) * 3],
+                                origNormals[(normIndex - 1) * 3 + 1],
+                                origNormals[(normIndex - 1) * 3 + 2]
+                            );
+                        }
+                        
+                        vertexCache.set(vertexKey, vertexCount);
+                        materialIndices.push(currentMaterialIndex);
+                        vertexCount++;
+                    }
+                    
+                    indices.push(vertexCache.get(vertexKey));
+                });
             }
         }
     }
-    
-    console.log('Material name to index mapping:', Object.fromEntries(materialNameToIndex));
-    console.log('Unique material indices used:', [...new Set(materialIndices)]);
     
     return {
         positions,
@@ -1252,33 +1261,18 @@ function generateDataFromOBJ(objData, materials, size = 1) {
     const diffuseColors = [];
     const specularColors = [];
     const shininess = [];
+    const finalIndices = [];
     
-    // Scale and process vertex data
+    // Process each vertex
     for (let i = 0; i < objData.positions.length; i += 3) {
-        // Scale positions
+        // Scale positions by size
         positions.push(
             objData.positions[i] * size,
             objData.positions[i + 1] * size,
             objData.positions[i + 2] * size
         );
         
-        // Get material for this vertex
-        const materialName = objData.materialIndices[Math.floor(i / 3)];
-        const material = materials.get(materialName);
-        
-        if (!material) {
-            console.warn(`Material not found: ${materialName}, using default`);
-        }
-        
-        const {
-            ambient = [0.2, 0.2, 0.2],
-            diffuse = [0.8, 0.8, 0.8],
-            specular = [1.0, 1.0, 1.0],
-            shininess: materialShininess = 100,
-            alpha = 1.0
-        } = material || {};
-        
-        // Add normals
+        // Add normals if they exist
         if (objData.normals.length > 0) {
             normals.push(
                 objData.normals[i],
@@ -1292,16 +1286,16 @@ function generateDataFromOBJ(objData, materials, size = 1) {
         const material = materialArray[materialIndex];
         
         // Add material properties
-        ambientColors.push(...ambient, alpha);
-        diffuseColors.push(...diffuse, alpha);
-        specularColors.push(...specular, alpha);
-        shininess.push(materialShininess);
+        ambientColors.push(...material.ambient, material.alpha);
+        diffuseColors.push(...material.diffuse, material.alpha);
+        specularColors.push(...material.specular, material.alpha);
+        shininess.push(material.shininess);
     }
     
-    // Generate default normals if none provided
-    const finalNormals = normals.length > 0 ? normals : generateDefaultNormals(positions, objData.indices);
+    // Copy indices
+    finalIndices.push(...objData.indices);
     
-    // Return buffer data formatted for WebGL
+    // Return the buffer arrays
     return {
         a_position: {
             numComponents: 3,
@@ -1309,7 +1303,7 @@ function generateDataFromOBJ(objData, materials, size = 1) {
         },
         a_normal: {
             numComponents: 3,
-            data: finalNormals
+            data: normals.length > 0 ? normals : generateDefaultNormals(positions, finalIndices)
         },
         a_ambientColor: {
             numComponents: 4,
@@ -1329,47 +1323,38 @@ function generateDataFromOBJ(objData, materials, size = 1) {
         },
         indices: {
             numComponents: 3,
-            data: objData.indices
+            data: finalIndices
         }
     };
 }
 
-// Helper function to generate default normals
+// Helper function to generate default normals if none are provided
 function generateDefaultNormals(positions, indices) {
     const normals = new Array(positions.length).fill(0);
     
-    // Calculate face normals
+    // Calculate normals for each face
     for (let i = 0; i < indices.length; i += 3) {
         const i1 = indices[i] * 3;
         const i2 = indices[i + 1] * 3;
         const i3 = indices[i + 2] * 3;
         
-        // Get triangle vertices
+        // Get vertices of the triangle
         const v1 = positions.slice(i1, i1 + 3);
         const v2 = positions.slice(i2, i2 + 3);
         const v3 = positions.slice(i3, i3 + 3);
         
-        // Calculate edges
-        const edge1 = [
-            v2[0] - v1[0],
-            v2[1] - v1[1],
-            v2[2] - v1[2]
-        ];
+        // Calculate vectors of two edges
+        const edge1 = [v2[0] - v1[0], v2[1] - v1[1], v2[2] - v1[2]];
+        const edge2 = [v3[0] - v1[0], v3[1] - v1[1], v3[2] - v1[2]];
         
-        const edge2 = [
-            v3[0] - v1[0],
-            v3[1] - v1[1],
-            v3[2] - v1[2]
-        ];
-        
-        // Calculate normal via cross product
+        // Calculate cross product
         const normal = [
             edge1[1] * edge2[2] - edge1[2] * edge2[1],
             edge1[2] * edge2[0] - edge1[0] * edge2[2],
             edge1[0] * edge2[1] - edge1[1] * edge2[0]
         ];
         
-        // Add to all vertices of this face
+        // Add to normal array
         for (const idx of [i1, i2, i3]) {
             normals[idx] += normal[0];
             normals[idx + 1] += normal[1];
@@ -1384,7 +1369,6 @@ function generateDefaultNormals(positions, indices) {
             normals[i + 1] * normals[i + 1] +
             normals[i + 2] * normals[i + 2]
         );
-        
         if (length > 0) {
             normals[i] /= length;
             normals[i + 1] /= length;
@@ -1395,7 +1379,7 @@ function generateDefaultNormals(positions, indices) {
     return normals;
 }
 
-// Main loading function
+// Function to load OBJ and MTL files
 async function loadModelData(objUrl, mtlUrl, size = 1) {
     try {
         const objResponse = await fetch(objUrl);
