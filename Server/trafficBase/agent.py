@@ -23,6 +23,7 @@ class Car(Agent):
         self.current_direction = None
         self.path = []
         self.current_road = None
+        self.episodes_waiting = 0
 
     def manhattan_distance(self, pos1, pos2):
         """Calculate Manhattan distance between two points."""
@@ -176,11 +177,19 @@ class Car(Agent):
             self.model.schedule.remove(self)
             self.model.cars_completed += 1
             return
+        
+        old_pos = self.pos
 
         # If we don't have a path or need to recalculate
         if not self.path:
             self.path = self.find_path()
             if not self.path:
+                if self.pos == old_pos:
+                    self.episodes_waiting += 1
+                    if self.episodes_waiting >= 3:
+                        print(f"Car {self.unique_id} is stuck at {self.pos}")
+                else:
+                    self.episodes_waiting = 0
                 return  # No path found
             # Remove current position from path
             if self.path[0] == self.pos:
