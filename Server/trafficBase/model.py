@@ -3,15 +3,27 @@ from mesa.time import RandomActivation
 from mesa.space import MultiGrid
 from agent import *
 import json
+from mesa.datacollection import DataCollector
 
 class CityModel(Model):
     def __init__(self, N):
-        dataDictionary = json.load(open("./city_files/mapDictionary.json"))
+        with open('./city_files/mapDictionary.json') as mapDictionary:
+            dataDictionary = json.load(mapDictionary)
+            
         self.traffic_lights = []
-        self.car_count = 0  # Add counter for unique car IDs
-        self.destinations = []  # Make destinations a class variable
+        self.car_count = 0
+        self.cars_completed = 0
+        self.destinations = []
+        self.total_episodes = 0
 
-
+        self.datacollector = DataCollector(
+            model_reporters={
+                "Active Cars": lambda m: len([a for a in m.schedule.agents if isinstance(a, Car)]),
+                "Completed Cars": lambda m: m.cars_completed,
+                "Average Completed Cars": lambda m: m.cars_completed / m.total_episodes
+            }
+        )
+        
         # Define valid road directions based on neighbor position
         neighbor_to_road_direction = {
             "above": "Down",  # If neighbor is above, road should point down
@@ -79,7 +91,7 @@ class CityModel(Model):
                                 road_direction = neighbor_to_road_direction[position]
                                 break
                         
-                        road = Road(f"r_{r*self.width+c}", self, road_direction)
+                        road = Road(f"r_{r*self.width+c}", self, "None")
                         self.grid.place_agent(road, (c, self.height - r - 1))
 
         self.num_agents = N
@@ -98,10 +110,19 @@ class CityModel(Model):
             for agent in cell_content:
                 if isinstance(agent, Destination):
                     destinations.append(agent)
+        """
+        destination = self.random.choice(self.destinations)
+        car0 = Car(f"car_{self.car_count}", self, destination)
+        self.grid.place_agent(car0, (0, 0))
+        self.schedule.add(car0)
+        self.car_count += 1
+        """
+        
             
     def step(self):
+        cars_spawned = False
         # Spawn cars every 2 steps
-        if self.schedule.steps % 10 == 0 and self.destinations:
+        if self.schedule.steps % 1 == 0 and self.destinations:
             corners = [
                 (0, 0),                    # Bottom left
                 (0, self.height-1),        # Top left
@@ -118,5 +139,13 @@ class CityModel(Model):
                     self.grid.place_agent(car, corner)
                     self.schedule.add(car)
                     self.car_count += 1
+                    cars_spawned = True
+
+        # stop if cars are not spawned when they should, every two steps
+        if not cars_spawned and self.schedule.steps % 1 == 0:
+            self.running = False
+            return
         
+        self.total_episodes += 1
+        self.datacollector.collect(self)  # Collect data
         self.schedule.step()

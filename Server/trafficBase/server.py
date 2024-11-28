@@ -2,7 +2,24 @@ from agent import *
 from model import CityModel
 from mesa.visualization import CanvasGrid, BarChartModule
 from mesa.visualization import ModularServer
+from mesa.visualization import CanvasGrid, BarChartModule, ChartModule
+from mesa.visualization import ModularServer
+from agent import *
+from model import CityModel
+from mesa.visualization import ModularServer, TextElement
+from mesa.visualization import CanvasGrid
 
+
+class CarInfoElement(TextElement):
+    def __init__(self):
+        super().__init__()
+        
+    def render(self, model):
+        active_cars = len([a for a in model.schedule.agents if isinstance(a, Car)])
+        completed_cars = model.cars_completed
+        
+        return f"Active Cars: {active_cars} | Completed Cars: {completed_cars}"
+    
 def agent_portrayal(agent):
     if agent is None: return
     
@@ -30,7 +47,7 @@ def agent_portrayal(agent):
     
     if (isinstance(agent, Destination)):
         portrayal["Shape"] = "circle"
-        portrayal["Color"] = "rgba(255,255,0,0.6)"  # Yellow with 0.6 transparency
+        portrayal["Color"] = "rgba(255,255,0,0.6)"
         portrayal["Layer"] = 2
         portrayal["r"] = 0.8
 
@@ -50,10 +67,10 @@ def agent_portrayal(agent):
         portrayal["h"] = 0.8
 
     if (isinstance(agent, Car)):
-        portrayal["Shape"] = "circle"  # Change shape to circle
+        portrayal["Shape"] = "circle"
         portrayal["Color"] = "blue"
         portrayal["Layer"] = 2
-        portrayal["r"] = 0.8  # Use radius instead of width/height for circles
+        portrayal["r"] = 0.8
 
     return portrayal
 
@@ -69,8 +86,20 @@ model_params = {"N":5}
 
 print(width, height)
 grid = CanvasGrid(agent_portrayal, width, height, 500, 500)
+car_info = CarInfoElement()
 
-server = ModularServer(CityModel, [grid], "Traffic Base", model_params)
+chart = ChartModule([
+    {"Label": "Average Completed Cars", "Color": "green"}
+], data_collector_name='datacollector')
+
+# Update server definition to use text display instead of charts
+server = ModularServer(
+    CityModel,
+    [grid, car_info, chart],  # Add text element instead of charts
+    "Traffic Base",
+    model_params
+)
+
                        
 server.port = 8521 # The default
 server.launch()

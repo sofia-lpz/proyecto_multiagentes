@@ -2,7 +2,7 @@ from mesa import Agent
 from heapq import heappush, heappop
 
 class Car(Agent):
-    def get_direction_from_coords(self, current_pos, next_pos):
+    def get_dir(self, current_pos, next_pos):
         dx = next_pos[0] - current_pos[0]
         dy = next_pos[1] - current_pos[1]
         
@@ -23,13 +23,13 @@ class Car(Agent):
         self.current_direction = None
         self.path = []
         self.current_road = None
-        self.alternate_destination = None
+        self.episodes_waiting = 0
 
     def manhattan_distance(self, pos1, pos2):
         """Calculate Manhattan distance between two points."""
         return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
 
-    def get_road_at_pos(self, pos):
+    def get_road(self, pos):
         """Get the road agent at a given position."""
         cell_contents = self.model.grid.get_cell_list_contents(pos)
         for content in cell_contents:
@@ -37,26 +37,27 @@ class Car(Agent):
                 return content
         return None
 
-    def is_valid_move(self, current_pos, next_pos, current_road=None):
+    def is_valid_move(self, current_pos, next_pos, current_road=None, ignore_traffic_lights=False):
         """
         Check if moving from current_pos to next_pos follows traffic rules.
         """
         if not current_road:
-            current_road = self.get_road_at_pos(current_pos)
+            current_road = self.get_road(current_pos)
             if not current_road:
                 return False
 
-        next_road = self.get_road_at_pos(next_pos)
+        next_road = self.get_road(next_pos)
         if not next_road:
             return False
 
         # Check traffic light
         cell_contents = self.model.grid.get_cell_list_contents(next_pos)
-        for content in cell_contents:
-            if isinstance(content, Traffic_Light) and not content.state:
-                return False
+        if not ignore_traffic_lights:
+            for content in cell_contents:
+                if isinstance(content, Traffic_Light) and not content.state:
+                    return False
 
-        move_direction = self.get_direction_from_coords(current_pos, next_pos)
+        move_direction = self.get_dir(current_pos, next_pos)
         
         # Direct movement along road direction
         if move_direction == next_road.direction:
@@ -64,6 +65,91 @@ class Car(Agent):
             
         # Check if turn is valid
         return self.can_turn(current_road, next_road)
+
+    def is_valid_cell(self, pos):
+        """Check if a cell is within the grid and not blocked by an obstacle."""
+        if (pos[0] < 0 or pos[0] >= self.model.grid.width or 
+            pos[1] < 0 or pos[1] >= self.model.grid.height):
+            return False
+        
+        cell_contents = self.model.grid.get_cell_list_contents(pos)
+        if any(isinstance(content, (Car,Obstacle)) for content in cell_contents):
+            return False
+        
+        return True
+    
+    def find_path(self):
+        """A* pathfinding implementation that respects traffic rules."""
+        start = self.pos
+        goal = self.destination.pos
+        
+        # Priority queue for open set
+        open_set = []
+        heappush(open_set, (0, start))
+        
+        # Dictionary to store path
+        came_from = {}
+        
+        # Cost to reach each node
+        g_score = {start: 0}
+        
+        # Estimated total cost
+        f_score = {start: self.manhattan_distance(start, goal)}
+        
+        # Get initial road
+        current_road = self.get_road(start)
+        if not current_road:
+            return None
+
+        while open_set:
+            current = heappop(open_set)[1]
+            
+            if current == goal:
+                # Reconstruct path
+                path = []
+                while current in came_from:
+                    path.append(current)
+                    current = came_from[current]
+                path.append(start)
+                path.reverse()
+                return path
+            
+            # Get neighbors (possible next positions)
+            neighbors = self.model.grid.get_neighborhood(
+                current,
+                moore=False,
+                include_center=False
+            )
+            
+            current_road = self.get_road(current)
+            if not current_road:
+                continue
+
+            for neighbor in neighbors:
+                # Skip if out of bounds
+                if (neighbor[0] < 0 or neighbor[0] >= self.model.grid.width or 
+                    neighbor[1] < 0 or neighbor[1] >= self.model.grid.height):
+                    continue
+
+                # Check if move follows traffic rules
+                if not self.is_valid_move(current, neighbor, current_road, True):
+                    continue
+
+                # Check for obstacles and other cars
+                cell_contents = self.model.grid.get_cell_list_contents(neighbor)
+                if any(isinstance(content, Obstacle) for content in cell_contents):
+                    continue
+
+                # Calculate scores
+                tentative_g_score = g_score[current] + 1
+                
+                if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g_score
+                    f_score[neighbor] = tentative_g_score + self.manhattan_distance(neighbor, goal)
+                    heappush(open_set, (f_score[neighbor], neighbor))
+        
+        return None
 
     def can_turn(self, current_road, next_road):
         """
@@ -76,126 +162,34 @@ class Car(Agent):
             "Down": "Up"
         }
 
-        required_direction = self.get_direction_from_coords(current_road.pos, next_road.pos)
+        if next_road.direction == "None":
+            return True
+        
+        required_direction = self.get_dir(current_road.pos, next_road.pos)
         direction_of_turned_road = next_road.direction
 
         return (direction_of_turned_road != opposite_turns.get(required_direction) and 
                 required_direction != opposite_turns.get(current_road.direction))
-
-    def get_valid_neighbors(self, pos):
-        """Get valid neighboring positions around a given position."""
-        neighbors = self.model.grid.get_neighborhood(
-            pos,
-            moore=False,  # Use von Neumann neighborhood
-            include_center=False
-        )
-        valid_neighbors = []
-        for neighbor in neighbors:
-            if (neighbor[0] >= 0 and neighbor[0] < self.model.grid.width and 
-                neighbor[1] >= 0 and neighbor[1] < self.model.grid.height):
-                # Check if there's a road
-                if self.get_road_at_pos(neighbor):
-                    valid_neighbors.append(neighbor)
-        return valid_neighbors
-
-    def find_path(self):
-        """A* pathfinding implementation that tries alternate destinations if main destination is blocked."""
-        start = self.pos
-        main_goal = self.destination.pos
-        
-        # First try direct path to destination
-        path = self.a_star_search(start, main_goal)
-        if path:
-            self.alternate_destination = None
-            return path
-            
-        # If no path found, try to find path to any valid neighbor of destination
-        destination_neighbors = self.get_valid_neighbors(main_goal)
-        
-        # Sort neighbors by distance from current position
-        destination_neighbors.sort(key=lambda x: self.manhattan_distance(start, x))
-        
-        for alt_goal in destination_neighbors:
-            # Skip if neighbor is occupied
-            cell_contents = self.model.grid.get_cell_list_contents(alt_goal)
-            if any(isinstance(content, Obstacle) for content in cell_contents):
-                continue
-                
-            path = self.a_star_search(start, alt_goal)
-            if path:
-                self.alternate_destination = alt_goal
-                return path
-                
-        return None
-
-    def a_star_search(self, start, goal):
-        """A* pathfinding implementation."""
-        open_set = []
-        heappush(open_set, (0, start))
-        
-        came_from = {}
-        g_score = {start: 0}
-        f_score = {start: self.manhattan_distance(start, goal)}
-        
-        current_road = self.get_road_at_pos(start)
-        if not current_road:
-            return None
-
-        while open_set:
-            current = heappop(open_set)[1]
-            
-            if current == goal:
-                path = []
-                while current in came_from:
-                    path.append(current)
-                    current = came_from[current]
-                path.append(start)
-                path.reverse()
-                return path
-            
-            neighbors = self.model.grid.get_neighborhood(
-                current,
-                moore=False,
-                include_center=False
-            )
-            
-            current_road = self.get_road_at_pos(current)
-            if not current_road:
-                continue
-
-            for neighbor in neighbors:
-                if (neighbor[0] < 0 or neighbor[0] >= self.model.grid.width or 
-                    neighbor[1] < 0 or neighbor[1] >= self.model.grid.height):
-                    continue
-
-                if not self.is_valid_move(current, neighbor, current_road):
-                    continue
-
-                cell_contents = self.model.grid.get_cell_list_contents(neighbor)
-                if any(isinstance(content, (Car, Obstacle)) for content in cell_contents):
-                    continue
-
-                tentative_g_score = g_score[current] + 1
-                
-                if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
-                    came_from[neighbor] = current
-                    g_score[neighbor] = tentative_g_score
-                    f_score[neighbor] = tentative_g_score + self.manhattan_distance(neighbor, goal)
-                    heappush(open_set, (f_score[neighbor], neighbor))
-        
-        return None
-
+    
     def move(self):
-        # If at destination or alternate destination, remove the car
-        if self.pos == self.destination.pos or (self.alternate_destination and self.pos == self.alternate_destination):
+        if self.pos == self.destination.pos:
             self.model.grid.remove_agent(self)
             self.model.schedule.remove(self)
+            self.model.cars_completed += 1
             return
+        
+        old_pos = self.pos
 
         # If we don't have a path or need to recalculate
         if not self.path:
             self.path = self.find_path()
             if not self.path:
+                if self.pos == old_pos:
+                    self.episodes_waiting += 1
+                    if self.episodes_waiting >= 3:
+                        print(f"Car {self.unique_id} is stuck at {self.pos}")
+                else:
+                    self.episodes_waiting = 0
                 return  # No path found
             # Remove current position from path
             if self.path[0] == self.pos:
@@ -203,23 +197,15 @@ class Car(Agent):
         
         if self.path:
             self.next_pos = self.path[0]
-            
-            # Verify move is still valid before executing
+
+            # Finally check if move is valid (including traffic lights)
             if self.is_valid_move(self.pos, self.next_pos):
-                next_pos_contents = self.model.grid.get_cell_list_contents(self.next_pos)
-                
-                # Check for cars and obstacles
-                if not any(isinstance(content, (Car, Obstacle)) for content in next_pos_contents):
-                    # Update current direction based on movement
-                    self.current_direction = self.get_direction_from_coords(self.pos, self.next_pos)
-                    self.model.grid.move_agent(self, self.next_pos)
-                    self.path.pop(0)
-                else:
-                    # Recalculate path if blocked
-                    self.path = self.find_path()
-            else:
-                # Recalculate path if move becomes invalid
-                self.path = self.find_path()
+                # Move if path is clear and traffic rules allow
+                self.current_direction = self.get_dir(self.pos, self.next_pos)
+                self.model.grid.move_agent(self, self.next_pos)
+                self.path.pop(0)
+            # If invalid due to traffic light, keep the same path and wait
+            # The car will try again next step when the light might be green
 
     def step(self):
         self.move()
