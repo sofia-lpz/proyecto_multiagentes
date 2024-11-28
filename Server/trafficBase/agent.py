@@ -215,6 +215,7 @@ class Car(Agent):
         if self.pos == self.destination.pos:
             self.model.grid.remove_agent(self)
             self.model.schedule.remove(self)
+            self.model.cars_completed += 1 
             return
 
         # If we don't have a path or need to recalculate
