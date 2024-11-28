@@ -19,10 +19,13 @@ class Car(Agent):
     def __init__(self, unique_id, model, Destination):
         super().__init__(unique_id, model)
         self.next_pos = None
-        self.destination = Destination
+        self.final_destination = Destination  # Store the original destination
+        self.destination = Destination  # Current target (might be temporary)
         self.current_direction = None
         self.path = []
         self.current_road = None
+        self.temp_destination = False  # Flag to track if we're using a temporary destination
+        self.color = Destination.color 
 
     def manhattan_distance(self, pos1, pos2):
         """Calculate Manhattan distance between two points."""
@@ -35,6 +38,49 @@ class Car(Agent):
             if isinstance(content, Road):
                 return content
         return None
+
+    def find_alternative_destination(self):
+        """Find a nearby road cell to use as a temporary destination."""
+        final_dest_pos = self.final_destination.pos
+        neighborhood = self.model.grid.get_neighborhood(
+            final_dest_pos,
+            moore=True,  # Use Moore neighborhood (8 adjacent cells)
+            include_center=False
+        )
+        
+        best_alternative = None
+        best_distance = float('inf')
+        
+        for pos in neighborhood:
+            # Skip if out of bounds
+            if (pos[0] < 0 or pos[0] >= self.model.grid.width or 
+                pos[1] < 0 or pos[1] >= self.model.grid.height):
+                continue
+                
+            cell_contents = self.model.grid.get_cell_list_contents(pos)
+            road = None
+            has_car = False
+            
+            for content in cell_contents:
+                if isinstance(content, Road):
+                    road = content
+                elif isinstance(content, Car):
+                    has_car = True
+                    break
+            
+            # If we found a road without a car, consider it as an alternative
+            if road and not has_car:
+                distance = self.manhattan_distance(self.pos, pos)
+                if distance < best_distance:
+                    best_distance = distance
+                    best_alternative = road
+        
+        return best_alternative
+
+    def is_destination_blocked(self):
+        """Check if the final destination is blocked by cars."""
+        cell_contents = self.model.grid.get_cell_list_contents(self.final_destination.pos)
+        return any(isinstance(content, Car) for content in cell_contents)
 
     def is_valid_move(self, current_pos, next_pos, current_road=None, ignore_traffic_lights=False):
         """
@@ -156,14 +202,35 @@ class Car(Agent):
                 required_direction != opposite_turns.get(current_road.direction))
     
     def move(self):
-        if self.pos == self.destination.pos:
+        # If we've reached the final destination
+        if self.pos == self.final_destination.pos:
             self.model.grid.remove_agent(self)
             self.model.schedule.remove(self)
             self.model.cars_completed += 1
             return
 
+        # If we're at a temporary destination, check if final destination is now available
+        if self.temp_destination and self.pos == self.destination.pos:
+            if not self.is_destination_blocked():
+                self.destination = self.final_destination
+                self.temp_destination = False
+                self.path = []  # Force path recalculation
+            else:
+                # Find another temporary destination if needed
+                alt_dest = self.find_alternative_destination()
+                if alt_dest:
+                    self.destination = alt_dest
+                    self.path = []  # Force path recalculation
+
         # If we don't have a path or need to recalculate
         if not self.path:
+            # If final destination is blocked and we're not already using a temporary destination
+            if not self.temp_destination and self.is_destination_blocked():
+                alt_dest = self.find_alternative_destination()
+                if alt_dest:
+                    self.destination = alt_dest
+                    self.temp_destination = True
+            
             self.path = self.find_path()
             if not self.path:
                 return  # No path found
@@ -228,6 +295,8 @@ class Destination(Agent):
     """
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
+        #pick a random color from a list of 17 colors
+        self.color = self.random.choice(["red", "blue", "green", "yellow", "purple", "orange", "pink", "brown", "black", "white", "gray", "cyan", "magenta", "olive", "maroon", "navy", "teal"])
 
     def step(self):
         pass
