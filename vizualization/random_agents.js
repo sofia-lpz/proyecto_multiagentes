@@ -400,37 +400,47 @@ function setupWorldView(gl) {
  * Sets up the user interface (UI) for the camera position.
  */
 function setupUI() {
-  const gui = new GUI();
-  
-  // Camera Position folder
-  const posFolder = gui.addFolder('Camera Position:')
-  posFolder.add(cameraPosition, 'x', -110, 110)
-      .onChange(value => {
-          cameraPosition.x = value;
-      });
-  posFolder.add(cameraPosition, 'y', -110, 110)
-      .onChange(value => {
-          cameraPosition.y = value;
-      });
-  posFolder.add(cameraPosition, 'z', -110, 110)
-      .onChange(value => {
-          cameraPosition.z = value;
-      });
-  
-  // Camera Target folder
-  const targetFolder = gui.addFolder('Camera Target:')
-  targetFolder.add(cameraTarget, 'x', -110, 110)
-      .onChange(value => {
-          cameraTarget.x = value;
-      });
-  targetFolder.add(cameraTarget, 'y', -110, 110)
-      .onChange(value => {
-          cameraTarget.y = value;
-      });
-  targetFolder.add(cameraTarget, 'z', -110, 110)
-      .onChange(value => {
-          cameraTarget.z = value;
-      });
+    const gui = new GUI();
+    
+    // Camera Position folder
+    const posFolder = gui.addFolder('Camera Position:');
+    posFolder.add(cameraPosition, 'x', -110, 110)
+        .onChange(value => {
+            cameraPosition.x = value;
+        })
+        .setValue(0); // Set initial value
+        
+    posFolder.add(cameraPosition, 'y', -110, 110)
+        .onChange(value => {
+            cameraPosition.y = value;
+        })
+        .setValue(0); // Set initial value
+        
+    posFolder.add(cameraPosition, 'z', -110, 110)
+        .onChange(value => {
+            cameraPosition.z = value;
+        })
+        .setValue(0); // Set initial value
+    
+    // Camera Target folder
+    const targetFolder = gui.addFolder('Camera Target:');
+    targetFolder.add(cameraTarget, 'x', -110, 110)
+        .onChange(value => {
+            cameraTarget.x = value;
+        })
+        .setValue(-33); // Set initial value
+        
+    targetFolder.add(cameraTarget, 'y', -110, 110)
+        .onChange(value => {
+            cameraTarget.y = value;
+        })
+        .setValue(45); // Set initial value
+        
+    targetFolder.add(cameraTarget, 'z', -110, 110)
+        .onChange(value => {
+            cameraTarget.z = value;
+        })
+        .setValue(-73); // Set initial value
 }
 
 function generateData(size) {
