@@ -219,6 +219,7 @@ class Car(Agent):
                     neighbors = [(self.pos[0] + 1, self.pos[1]), (self.pos[0] - 1, self.pos[1])]
 
                 # Try each adjacent lane
+                lane_changed = False
                 for lane_pos in neighbors:
                     # Check if lane position is valid and has a road
                     if self.is_valid_cell(lane_pos) and self.get_road(lane_pos):
@@ -226,7 +227,27 @@ class Car(Agent):
                         self.model.grid.move_agent(self, lane_pos)
                         # Reset path to recalculate from new position
                         self.path = []
+                        lane_changed = True
                         break
+
+                # If lane change failed, try moving to a random valid neighbor
+                if not lane_changed:
+                    # Get all possible neighbors
+                    all_neighbors = self.model.grid.get_neighborhood(
+                        self.pos,
+                        moore=True,
+                        include_center=False
+                    )
+                    # Filter valid moves
+                    valid_moves = [pos for pos in all_neighbors 
+                                 if self.is_valid_cell(pos) and self.get_road(pos)]
+                    
+                    if valid_moves:
+                        # Choose random valid position
+                        new_pos = self.random.choice(valid_moves)
+                        self.model.grid.move_agent(self, new_pos)
+                        # Reset path from new position
+                        self.path = []
 
 
 
