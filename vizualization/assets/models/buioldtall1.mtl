@@ -1,0 +1,82 @@
+# Blender 4.3.0 MTL File: 'None'
+# www.blender.org
+
+newmtl col_besi_peggangan
+Ns 96.078453
+Ka 1.000000 1.000000 1.000000
+Kd 0.113919 0.113919 0.113919
+Ks 0.200000 0.200000 0.200000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+
+newmtl col_jendela_building_1_2
+Ns 96.078453
+Ka 1.000000 1.000000 1.000000
+Kd 0.640000 0.640000 0.640000
+Ks 0.200000 0.200000 0.200000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+
+newmtl col_jendela_building_2_2.001
+Ns 96.078453
+Ka 1.000000 1.000000 1.000000
+Kd 0.000000 0.138479 0.640000
+Ks 0.200000 0.200000 0.200000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+
+newmtl col_jendela_building_4
+Ns 96.078453
+Ka 1.000000 1.000000 1.000000
+Kd 0.000000 0.003607 0.181261
+Ks 0.200000 0.200000 0.200000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+
+newmtl col_jendela_building_4_2
+Ns 96.078453
+Ka 1.000000 1.000000 1.000000
+Kd 0.028172 0.028172 0.028172
+Ks 0.200000 0.200000 0.200000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+
+newmtl uv_bangunan_2
+Ns 96.078453
+Ka 1.000000 1.000000 1.000000
+Ks 0.200000 0.200000 0.200000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd -s 5 5 5 /home/rintintin/Downloads/48-fbx-obj/Building_1/Texturizer/wall_2.jpg
+
+newmtl uv_bangunan_2_wall.jpg
+Ns 96.078453
+Ka 1.000000 1.000000 1.000000
+Ks 0.200000 0.200000 0.200000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd /home/rintintin/Downloads/48-fbx-obj/Building_1/Texturizer/wall.jpg
+
+newmtl uv_bangunan_ats
+Ns 96.078453
+Ka 1.000000 1.000000 1.000000
+Ks 0.200000 0.200000 0.200000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd /home/rintintin/Downloads/48-fbx-obj/Building_1/Texturizer/tex_besi_2.jpg
