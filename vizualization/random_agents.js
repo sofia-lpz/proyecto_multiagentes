@@ -34,134 +34,157 @@ let cameraPosition = {x:0, y:0, z:0};
 
 // Initialize the frame count
 let frameCount = 0;
-
-// Define the data object
 const data = {
   NAgents: 500,
   width: 100,
   height: 100
 };
+// Define the data object
 
 let cameraTarget = {x:data.width/2, y:0, z:data.height/2};
 
 // Main function to initialize and run the application
-async function main() {
-  const canvas = document.querySelector('canvas');
-  gl = canvas.getContext('webgl2');
+let agentModelData;
 
-  // Create the program information using the vertex and fragment shaders
-  programInfo = twgl.createProgramInfo(gl, [vsGLSL, fsGLSL]);
 
-  
-  // Generate the agent and obstacle data
-  agentArrays = generateData(1);
-  obstacleArrays = generateObstacleData(1);
 
-  // Create buffer information from the agent and obstacle data
-  agentsBufferInfo = twgl.createBufferInfoFromArrays(gl, agentArrays);
-  obstaclesBufferInfo = twgl.createBufferInfoFromArrays(gl, obstacleArrays);
 
-  // Create vertex array objects (VAOs) from the buffer information
-  agentsVao = twgl.createVAOFromBufferInfo(gl, programInfo, agentsBufferInfo);
-  obstaclesVao = twgl.createVAOFromBufferInfo(gl, programInfo, obstaclesBufferInfo);
-
-  // Set up the user interface
-  setupUI();
-
-  // Initialize the agents model
-  await initAgentsModel();
-
-  // Get the agents and obstacles
-  await getAgents();
-  await getObstacles();
-
-  // Draw the scene
-  await drawScene(gl, programInfo, agentsVao, agentsBufferInfo, obstaclesVao, obstaclesBufferInfo);
-}
-
-/*
- * Initializes the agents model by sending a POST request to the agent server.
- */
 async function initAgentsModel() {
   try {
-    // Send a POST request to the agent server to initialize the model
-    let response = await fetch(agent_server_uri + "init", {
-      method: 'POST', 
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify(data)
-    })
+      // Send a POST request to the agent server to initialize the model
+      let response = await fetch(agent_server_uri + "init", {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+      });
 
-    // Check if the response was successful
-    if(response.ok){
-      // Parse the response as JSON and log the message
-      let result = await response.json()
-      console.log(result.message)
-    }
-      
+      if(response.ok) {
+          let result = await response.json();
+          console.log(result.message);
+      }
   } catch (error) {
-    // Log any errors that occur during the request
-    console.log(error)    
+      console.log(error);
   }
 }
+
+
+async function main() {
+    const canvas = document.querySelector('canvas');
+    gl = canvas.getContext('webgl2');
+
+    // Create the program information using the vertex and fragment shaders
+    programInfo = twgl.createProgramInfo(gl, [vsGLSL, fsGLSL]);
+
+    try {
+        // Load the 3D model for agents
+        // Replace these paths with your actual model file paths
+        agentModelData = await loadModelData(
+            './assets/models/Car.obj',  // path to your OBJ file
+            './assets/models/Car.mtl',  // path to your MTL file
+            0.3 // scale factor for the model
+        );
+    } catch (error) {
+        console.error('Failed to load agent model:', error);
+        // Fallback to basic cube if model loading fails
+        agentModelData = generateData(1);
+    }
+    
+    // Use the loaded model data for agents
+    agentArrays = agentModelData;
+    
+    // Create obstacle data as before
+    obstacleArrays = generateObstacleData(1);
+
+    // Create buffer information from the agent and obstacle data
+    agentsBufferInfo = twgl.createBufferInfoFromArrays(gl, agentArrays);
+    obstaclesBufferInfo = twgl.createBufferInfoFromArrays(gl, obstacleArrays);
+
+    // Create vertex array objects (VAOs) from the buffer information
+    agentsVao = twgl.createVAOFromBufferInfo(gl, programInfo, agentsBufferInfo);
+    obstaclesVao = twgl.createVAOFromBufferInfo(gl, programInfo, obstaclesBufferInfo);
+
+    // Set up the user interface
+    setupUI();
+
+    // Initialize the agents model
+    await initAgentsModel();
+
+    // Get the agents and obstacles
+    await getAgents();
+    await getObstacles();
+
+    // Draw the scene
+    await drawScene(gl, programInfo, agentsVao, agentsBufferInfo, obstaclesVao, obstaclesBufferInfo);
+}
+
 
 /*
  * Retrieves the current positions of all agents from the agent server.
  */
+// Add offset constants at the top of your file
+const AGENT_OFFSETS = {
+  y: 0,  // Vertical offset from the ground
+  x: 0,    // Horizontal offset if needed
+  z: 0    // Depth offset if needed
+};
+
+// Modify the getAgents function to include the offsets
 async function getAgents() {
   try {
-    // Send a GET request to the agent server to retrieve the agent positions
-    let response = await fetch(agent_server_uri + "getAgents") 
+      let response = await fetch(agent_server_uri + "getAgents");
+      
+      if(response.ok) {
+          let result = await response.json();
+          console.log(result.positions);
 
-    // Check if the response was successful
-    if(response.ok){
-      // Parse the response as JSON
-      let result = await response.json()
-
-      // Log the agent positions
-      console.log(result.positions)
-
-      // Check if the agents array is empty
-      if(agents.length == 0){
-        // Create new agents and add them to the agents array
-        for (const agent of result.positions) {
-          const newAgent = new Object3D(agent.id, [agent.x, agent.y, agent.z])
-          agents.push(newAgent)
-        }
-        // Log the agents array
-        console.log("Agents:", agents)
-
-      } else {
-        // Create a set of current agent IDs from the server response
-        const currentAgentIds = new Set(result.positions.map(agent => agent.id));
-        
-        // Remove agents that no longer exist in the server response
-        agents.forEach((agent, index) => {
-          if (!currentAgentIds.has(agent.id)) {
-            agents.splice(index, 1);
-          }
-        });
-
-        // Update positions of existing agents and add new ones
-        for (const agent of result.positions) {
-          const current_agent = agents.find((object3d) => object3d.id == agent.id)
-
-          if(current_agent != undefined){
-            // Update the agent's position
-            current_agent.position = [agent.x, agent.y, agent.z]
+          if(agents.length === 0) {
+              // Creating new agents with offset positions
+              for (const agent of result.positions) {
+                  const offsetPosition = [
+                      agent.x + AGENT_OFFSETS.x,
+                      agent.y + AGENT_OFFSETS.y,
+                      agent.z + AGENT_OFFSETS.z
+                  ];
+                  const newAgent = new Object3D(agent.id, offsetPosition);
+                  agents.push(newAgent);
+              }
+              console.log("Agents:", agents);
           } else {
-            // If agent doesn't exist, create a new one
-            const newAgent = new Object3D(agent.id, [agent.x, agent.y, agent.z])
-            agents.push(newAgent)
-          }
-        }
-      }
-    }
+              const currentAgentIds = new Set(result.positions.map(agent => agent.id));
+              
+              // Remove agents that no longer exist
+              agents.forEach((agent, index) => {
+                  if (!currentAgentIds.has(agent.id)) {
+                      agents.splice(index, 1);
+                  }
+              });
 
+              // Update existing agents with offset positions
+              for (const agent of result.positions) {
+                  const current_agent = agents.find((object3d) => object3d.id === agent.id);
+                  if(current_agent != undefined) {
+                      current_agent.position = [
+                          agent.x + AGENT_OFFSETS.x,
+                          agent.y + AGENT_OFFSETS.y,
+                          agent.z + AGENT_OFFSETS.z
+                      ];
+                  } else {
+                      const offsetPosition = [
+                          agent.x + AGENT_OFFSETS.x,
+                          agent.y + AGENT_OFFSETS.y,
+                          agent.z + AGENT_OFFSETS.z
+                      ];
+                      const newAgent = new Object3D(agent.id, offsetPosition);
+                      agents.push(newAgent);
+                  }
+              }
+          }
+      }
   } catch (error) {
-    // Log any errors that occur during the request
-    console.log(error) 
+      console.log(error);
   }
 }
+
 /*
  * Retrieves the current positions of all obstacles from the agent server.
  */
@@ -195,20 +218,31 @@ async function getObstacles() {
  */
 async function update() {
   try {
-    // Send a request to the agent server to update the agent positions
-    let response = await fetch(agent_server_uri + "update") 
+      let response = await fetch(agent_server_uri + "update");
 
-    // Check if the response was successful
-    if(response.ok){
-      // Retrieve the updated agent positions
-      await getAgents()
-      // Log a message indicating that the agents have been updated
-      console.log("Updated agents")
-    }
-
+      if(response.ok) {
+          // Get updated positions with offsets
+          let agentsResponse = await fetch(agent_server_uri + "getAgents");
+          
+          if(agentsResponse.ok) {
+              let result = await agentsResponse.json();
+              
+              // Update each agent's position with offsets
+              for (const agentData of result.positions) {
+                  const agent = agents.find(a => a.id === agentData.id);
+                  if(agent) {
+                      agent.position = [
+                          agentData.x + AGENT_OFFSETS.x,
+                          agentData.y + AGENT_OFFSETS.y,
+                          agentData.z + AGENT_OFFSETS.z
+                      ];
+                  }
+              }
+          }
+          console.log("Updated agents with offsets");
+      }
   } catch (error) {
-    // Log any errors that occur during the request
-    console.log(error) 
+      console.log(error);
   }
 }
 
@@ -272,27 +306,51 @@ function drawAgents(distance, agentsVao, agentsBufferInfo, viewProjectionMatrix)
   gl.bindVertexArray(agentsVao);
 
   for(const agent of agents) {
-      const cube_trans = twgl.v3.create(...agent.position);
-      const cube_scale = twgl.v3.create(...agent.scale);
-
       const worldMatrix = twgl.m4.identity();
+      const cube_trans = twgl.v3.create(...agent.position);
+      const cube_scale = twgl.v3.create(
+          agent.scale[0] * distance,
+          agent.scale[1] * distance,
+          agent.scale[2] * distance
+      );
+
+      // Apply transformations in the correct order:
+      // 1. First translate to position
       twgl.m4.translate(worldMatrix, cube_trans, worldMatrix);
-      twgl.m4.rotateX(worldMatrix, agent.rotation[0], worldMatrix);
+      
+      // 2. Apply rotations in the correct order:
+      // First rotate 90 degrees around X to orient the model upright
+      twgl.m4.rotateX(worldMatrix, Math.PI / 2, worldMatrix);
+      // Then apply the agent's Y rotation for heading direction
       twgl.m4.rotateY(worldMatrix, agent.rotation[1], worldMatrix);
-      twgl.m4.rotateZ(worldMatrix, agent.rotation[2], worldMatrix);
+      
+      // 3. Finally scale the model
       twgl.m4.scale(worldMatrix, cube_scale, worldMatrix);
 
-      // Updated matrices for the provided shaders
+      // Calculate matrices needed for Phong shading
+      const worldInverseTranspose = twgl.m4.transpose(twgl.m4.inverse(worldMatrix));
+      const worldViewProjection = twgl.m4.multiply(viewProjectionMatrix, worldMatrix);
+
+      // Set the uniforms for Phong shading
       const uniforms = {
           u_world: worldMatrix,
-          u_worldViewProjection: twgl.m4.multiply(viewProjectionMatrix, worldMatrix),
-          u_worldInverseTransform: twgl.m4.transpose(twgl.m4.inverse(worldMatrix))
+          u_worldViewProjection: worldViewProjection,
+          u_worldInverseTransform: worldInverseTranspose,
+          
+          // These might already be set globally, but including here for completeness
+          u_viewWorldPosition: [cameraPosition.x + data.width/2, cameraPosition.y, cameraPosition.z + data.height/2],
+          u_lightWorldPosition: [20, 30, 50],
+          u_ambientLight: [0.2, 0.2, 0.2, 1.0],
+          u_diffuseLight: [0.8, 0.8, 0.8, 1.0],
+          u_specularLight: [1.0, 1.0, 1.0, 1.0],
+          u_emissiveFactor: 0.0  // Set to 0 since agents aren't emissive
       };
 
       twgl.setUniforms(programInfo, uniforms);
       twgl.drawBufferInfo(gl, agentsBufferInfo);
   }
 }
+
 
       
 /*
@@ -911,5 +969,334 @@ function updateTrafficLightColors(trafficLights) {
 }
 
 
+
+
+// Function to parse OBJ file content
+function parseOBJ(objText) {
+  const positions = [];
+  const texcoords = [];
+  const normals = [];
+  const indices = [];
+  const materialIndices = [];
+  
+  let currentMaterial = 0;
+  const vertexMap = new Map();
+  let vertexCount = 0;
+
+  const lines = objText.split('\n');
+  
+  for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      const command = parts[0];
+      
+      switch (command) {
+          case 'v':  // Vertex position
+              positions.push(
+                  parseFloat(parts[1]),
+                  parseFloat(parts[2]),
+                  parseFloat(parts[3])
+              );
+              break;
+              
+          case 'vt':  // Texture coordinates
+              texcoords.push(
+                  parseFloat(parts[1]),
+                  parseFloat(parts[2])
+              );
+              break;
+              
+          case 'vn':  // Vertex normal
+              normals.push(
+                  parseFloat(parts[1]),
+                  parseFloat(parts[2]),
+                  parseFloat(parts[3])
+              );
+              break;
+              
+          case 'usemtl':  // Material
+              currentMaterial = parts[1];
+              break;
+              
+          case 'f':  // Face
+              // Handle face indices (supports v/vt/vn format)
+              for (let i = 1; i <= 3; i++) {
+                  const vertexData = parts[i].split('/');
+                  const vertexKey = parts[i]; // Use the complete vertex specification as key
+                  
+                  let vertexIndex;
+                  if (vertexMap.has(vertexKey)) {
+                      vertexIndex = vertexMap.get(vertexKey);
+                  } else {
+                      vertexIndex = vertexCount++;
+                      vertexMap.set(vertexKey, vertexIndex);
+                      
+                      // Add vertex data to arrays
+                      const positionIdx = parseInt(vertexData[0]) - 1;
+                      const texcoordIdx = vertexData[1] ? parseInt(vertexData[1]) - 1 : -1;
+                      const normalIdx = vertexData[2] ? parseInt(vertexData[2]) - 1 : -1;
+                      
+                      // Add position
+                      if (positionIdx >= 0) {
+                          positions.push(
+                              positions[positionIdx * 3],
+                              positions[positionIdx * 3 + 1],
+                              positions[positionIdx * 3 + 2]
+                          );
+                      }
+                      
+                      // Add texcoord if available
+                      if (texcoordIdx >= 0) {
+                          texcoords.push(
+                              texcoords[texcoordIdx * 2],
+                              texcoords[texcoordIdx * 2 + 1]
+                          );
+                      }
+                      
+                      // Add normal if available
+                      if (normalIdx >= 0) {
+                          normals.push(
+                              normals[normalIdx * 3],
+                              normals[normalIdx * 3 + 1],
+                              normals[normalIdx * 3 + 2]
+                          );
+                      }
+                      
+                      materialIndices.push(currentMaterial);
+                  }
+                  
+                  indices.push(vertexIndex);
+              }
+              break;
+      }
+  }
+  
+  return {
+      positions,
+      texcoords,
+      normals,
+      indices,
+      materialIndices
+  };
+}
+
+// Function to parse MTL file content
+function parseMTL(mtlText) {
+  const materials = new Map();
+  let currentMaterial = null;
+  
+  const lines = mtlText.split('\n');
+  
+  for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      const command = parts[0];
+      
+      switch (command) {
+          case 'newmtl':
+              currentMaterial = {
+                  name: parts[1],
+                  ambient: [0.2, 0.2, 0.2],
+                  diffuse: [0.8, 0.8, 0.8],
+                  specular: [1.0, 1.0, 1.0],
+                  shininess: 100,
+                  alpha: 1.0
+              };
+              materials.set(currentMaterial.name, currentMaterial);
+              break;
+              
+          case 'Ka':  // Ambient color
+              currentMaterial.ambient = [
+                  parseFloat(parts[1]),
+                  parseFloat(parts[2]),
+                  parseFloat(parts[3])
+              ];
+              break;
+              
+          case 'Kd':  // Diffuse color
+              currentMaterial.diffuse = [
+                  parseFloat(parts[1]),
+                  parseFloat(parts[2]),
+                  parseFloat(parts[3])
+              ];
+              break;
+              
+          case 'Ks':  // Specular color
+              currentMaterial.specular = [
+                  parseFloat(parts[1]),
+                  parseFloat(parts[2]),
+                  parseFloat(parts[3])
+              ];
+              break;
+              
+          case 'Ns':  // Shininess
+              currentMaterial.shininess = parseFloat(parts[1]);
+              break;
+              
+          case 'd':   // Alpha/transparency
+          case 'Tr':
+              currentMaterial.alpha = parseFloat(parts[1]);
+              break;
+      }
+  }
+  
+  return materials;
+}
+
+// Function to generate buffer data from OBJ and MTL
+function generateDataFromOBJ(objData, materials, size = 1) {
+  // Create arrays for the buffer data
+  const positions = [];
+  const normals = [];
+  const ambientColors = [];
+  const diffuseColors = [];
+  const specularColors = [];
+  const shininess = [];
+  const finalIndices = [];
+  
+  // Process each vertex
+  for (let i = 0; i < objData.positions.length; i += 3) {
+      // Scale positions by size
+      positions.push(
+          objData.positions[i] * size,
+          objData.positions[i + 1] * size,
+          objData.positions[i + 2] * size
+      );
+      
+      // Add normals if they exist
+      if (objData.normals.length > 0) {
+          normals.push(
+              objData.normals[i],
+              objData.normals[i + 1],
+              objData.normals[i + 2]
+          );
+      }
+      
+      // Get material for this vertex
+      const materialName = objData.materialIndices[Math.floor(i / 3)];
+      const material = materials.get(materialName) || {
+          ambient: [0.2, 0.2, 0.2],
+          diffuse: [0.8, 0.8, 0.8],
+          specular: [1.0, 1.0, 1.0],
+          shininess: 100,
+          alpha: 1.0
+      };
+      
+      // Add material properties
+      ambientColors.push(...material.ambient, material.alpha);
+      diffuseColors.push(...material.diffuse, material.alpha);
+      specularColors.push(...material.specular, material.alpha);
+      shininess.push(material.shininess);
+  }
+  
+  // Copy indices
+  finalIndices.push(...objData.indices);
+  
+  // Return the buffer arrays
+  return {
+      a_position: {
+          numComponents: 3,
+          data: positions
+      },
+      a_normal: {
+          numComponents: 3,
+          data: normals.length > 0 ? normals : generateDefaultNormals(positions, finalIndices)
+      },
+      a_ambientColor: {
+          numComponents: 4,
+          data: ambientColors
+      },
+      a_diffuseColor: {
+          numComponents: 4,
+          data: diffuseColors
+      },
+      a_specularColor: {
+          numComponents: 4,
+          data: specularColors
+      },
+      a_shininess: {
+          numComponents: 1,
+          data: shininess
+      },
+      indices: {
+          numComponents: 3,
+          data: finalIndices
+      }
+  };
+}
+
+// Helper function to generate default normals if none are provided
+function generateDefaultNormals(positions, indices) {
+  const normals = new Array(positions.length).fill(0);
+  
+  // Calculate normals for each face
+  for (let i = 0; i < indices.length; i += 3) {
+      const i1 = indices[i] * 3;
+      const i2 = indices[i + 1] * 3;
+      const i3 = indices[i + 2] * 3;
+      
+      // Get vertices of the triangle
+      const v1 = positions.slice(i1, i1 + 3);
+      const v2 = positions.slice(i2, i2 + 3);
+      const v3 = positions.slice(i3, i3 + 3);
+      
+      // Calculate vectors of two edges
+      const edge1 = [v2[0] - v1[0], v2[1] - v1[1], v2[2] - v1[2]];
+      const edge2 = [v3[0] - v1[0], v3[1] - v1[1], v3[2] - v1[2]];
+      
+      // Calculate cross product
+      const normal = [
+          edge1[1] * edge2[2] - edge1[2] * edge2[1],
+          edge1[2] * edge2[0] - edge1[0] * edge2[2],
+          edge1[0] * edge2[1] - edge1[1] * edge2[0]
+      ];
+      
+      // Add to normal array
+      for (const idx of [i1, i2, i3]) {
+          normals[idx] += normal[0];
+          normals[idx + 1] += normal[1];
+          normals[idx + 2] += normal[2];
+      }
+  }
+  
+  // Normalize all normals
+  for (let i = 0; i < normals.length; i += 3) {
+      const length = Math.sqrt(
+          normals[i] * normals[i] +
+          normals[i + 1] * normals[i + 1] +
+          normals[i + 2] * normals[i + 2]
+      );
+      if (length > 0) {
+          normals[i] /= length;
+          normals[i + 1] /= length;
+          normals[i + 2] /= length;
+      }
+  }
+  
+  return normals;
+}
+
+// Function to load OBJ and MTL files
+async function loadModelData(objUrl, mtlUrl, size = 1) {
+  try {
+      // Load OBJ file
+      const objResponse = await fetch(objUrl);
+      const objText = await objResponse.text();
+      
+      // Load MTL file
+      const mtlResponse = await fetch(mtlUrl);
+      const mtlText = await mtlResponse.text();
+      
+      // Parse the files
+      const objData = parseOBJ(objText);
+      const materials = parseMTL(mtlText);
+      
+      // Generate the buffer data
+      return generateDataFromOBJ(objData, materials, size);
+      
+  } catch (error) {
+      console.error('Error loading model:', error);
+      // Return default cube data if loading fails
+      return generateData(size);
+  }
+}
 
 main()
