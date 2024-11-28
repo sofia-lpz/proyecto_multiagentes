@@ -65,6 +65,18 @@ class Car(Agent):
         # Check if turn is valid
         return self.can_turn(current_road, next_road)
 
+    def is_valid_cell(self, pos):
+        """Check if a cell is within the grid and not blocked by an obstacle."""
+        if (pos[0] < 0 or pos[0] >= self.model.grid.width or 
+            pos[1] < 0 or pos[1] >= self.model.grid.height):
+            return False
+        
+        cell_contents = self.model.grid.get_cell_list_contents(pos)
+        if any(isinstance(content, (Car,Obstacle)) for content in cell_contents):
+            return False
+        
+        return True
+    
     def find_path(self):
         """A* pathfinding implementation that respects traffic rules."""
         start = self.pos
@@ -176,18 +188,6 @@ class Car(Agent):
         
         if self.path:
             self.next_pos = self.path[0]
-            
-            # First check for permanent obstacles
-            next_pos_contents = self.model.grid.get_cell_list_contents(self.next_pos)
-            if any(isinstance(content, Obstacle) for content in next_pos_contents):
-                # Recalculate path if blocked by obstacle
-                self.path = self.find_path()
-                return
-                
-            # Then check for cars - just wait if blocked by car
-            if any(isinstance(content, Car) for content in next_pos_contents):
-                # Keep the same path but wait
-                return
 
             # Finally check if move is valid (including traffic lights)
             if self.is_valid_move(self.pos, self.next_pos):
