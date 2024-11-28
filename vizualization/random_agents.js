@@ -1,4 +1,3 @@
-'use strict';
 
 import * as twgl from 'twgl.js';
 import GUI from 'lil-gui';
@@ -9,6 +8,11 @@ import vsGLSL from "./assets/vs_phong.glsl?raw";
 import fsGLSL from "./assets/fs_phong.glsl?raw";
 
 // Define the Object3D class to represent 3D objects
+let lastFrameTime = performance.now();
+let lastUpdateTime = performance.now();
+const INTERPOLATION_INTERVAL = 1000; // 1 second between updates
+
+// Modify the Object3D class to include interpolation properties
 class Object3D {
   constructor(id, position=[0,0,0], rotation=[0,0,0], scale=[1,1,1]){
     this.id = id;
@@ -16,6 +20,11 @@ class Object3D {
     this.rotation = rotation;
     this.scale = scale;
     this.matrix = twgl.m4.create();
+    
+    // Add these properties for interpolation
+    this.previousPosition = [...position];
+    this.targetPosition = [...position];
+    this.interpolationFactor = 1.0;
   }
 }
 
@@ -126,61 +135,55 @@ async function initAgentsModel() {
  */
 async function getAgents() {
     try {
-        let response = await fetch(agent_server_uri + "getAgents") 
+        let response = await fetch(agent_server_uri + "getAgents");
 
-        if(response.ok){
-            let result = await response.json()
-            console.log(result.positions)
+        if (response.ok) {
+            let result = await response.json();
+            
+            const currentAgentsMap = new Map(
+                result.positions.map(agent => [agent.id, agent])
+            );
 
-            if(agents.length == 0){
-                // Create new agents and add them to the agents array
-                for (const agent of result.positions) {
-                    // Convert direction to rotation angle
-                    const rotation = getRotationFromDirection(agent.direction);
-                    const newAgent = new Object3D(
-                        agent.id, 
-                        [agent.x, agent.y, agent.z || 0],  // Add z if present, or 0
-                        [0, rotation, 0]  // Y-axis rotation based on direction
-                    );
-                    agents.push(newAgent);
-                }
-                console.log("Agents:", agents);
-
-            } else {
-                // Create a set of current agent IDs from the server response
-                const currentAgentIds = new Set(result.positions.map(agent => agent.id));
-                
-                // Remove agents that no longer exist in the server response
-                agents.forEach((agent, index) => {
-                    if (!currentAgentIds.has(agent.id)) {
-                        agents.splice(index, 1);
-                    }
-                });
-
-                // Update positions of existing agents and add new ones
-                for (const agent of result.positions) {
-                    const current_agent = agents.find((object3d) => object3d.id == agent.id);
-                    const rotation = getRotationFromDirection(agent.direction);
-
-                    if(current_agent != undefined){
-                        // Update the agent's position and rotation
-                        current_agent.position = [agent.x, agent.y, agent.z || 0];
-                        current_agent.rotation = [0, rotation, 0];
-                    } else {
-                        // If agent doesn't exist, create a new one
-                        const newAgent = new Object3D(
-                            agent.id, 
-                            [agent.x, agent.y, agent.z || 0],
-                            [0, rotation, 0]
-                        );
-                        agents.push(newAgent);
-                    }
+            // Remove agents that no longer exist
+            for (let i = agents.length - 1; i >= 0; i--) {
+                if (!currentAgentsMap.has(agents[i].id)) {
+                    agents.splice(i, 1);
                 }
             }
-        }
 
+            // Update existing agents and add new ones
+            result.positions.forEach(agentData => {
+                const rotation = getRotationFromDirection(agentData.direction);
+                const existingAgentIndex = agents.findIndex(a => a.id === agentData.id);
+
+                if (existingAgentIndex !== -1) {
+                    // Update existing agent
+                    const agent = agents[existingAgentIndex];
+                    // Store current position as previous position
+                    agent.previousPosition = [...agent.position];
+                    // Set new target position
+                    agent.targetPosition = [agentData.x, agentData.y, agentData.z || 0];
+                    // Reset interpolation factor
+                    agent.interpolationFactor = 0;
+                    agent.rotation = [0, rotation, 0];
+                } else {
+                    // Add new agent
+                    const newAgent = new Object3D(
+                        agentData.id,
+                        [agentData.x, agentData.y, agentData.z || 0],
+                        [0, rotation, 0],
+                        [1, 1, 1]
+                    );
+                    // Initialize interpolation properties
+                    newAgent.previousPosition = [...newAgent.position];
+                    newAgent.targetPosition = [...newAgent.position];
+                    newAgent.interpolationFactor = 1.0;
+                    agents.push(newAgent);
+                }
+            });
+        }
     } catch (error) {
-        console.log(error) 
+        console.error("Error fetching agents:", error);
     }
 }
 /*
@@ -244,41 +247,58 @@ async function update() {
  * @param {Object} obstaclesBufferInfo - The buffer information for obstacles.
  */
 async function drawScene(gl, programInfo, agentsVao, agentsBufferInfo, obstaclesVao, obstaclesBufferInfo) {
-  twgl.resizeCanvasToDisplaySize(gl.canvas);
-  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-
-  gl.clearColor(0.2, 0.2, 0.2, 1);
-  gl.enable(gl.DEPTH_TEST);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-  gl.useProgram(programInfo.program);
-
-  const viewProjectionMatrix = setupWorldView(gl);
+    // Calculate deltaTime
+    const currentTime = performance.now();
+    const deltaTime = (currentTime - lastFrameTime) / 1000; // Convert to seconds
+    lastFrameTime = currentTime;
   
-  // Add lighting uniforms
-  const uniforms = {
-      u_viewWorldPosition: [cameraPosition.x + data.width/2, cameraPosition.y, cameraPosition.z + data.height/2],
-      u_lightWorldPosition: [20, 30, 50],
-      u_ambientLight: [0.2, 0.2, 0.2, 1.0],
-      u_diffuseLight: [0.8, 0.8, 0.8, 1.0],
-      u_specularLight: [1.0, 1.0, 1.0, 1.0]
-  };
+    // Update interpolation for all agents
+    agents.forEach(agent => {
+      agent.interpolationFactor = Math.min(agent.interpolationFactor + deltaTime, 1.0);
+      
+      // Interpolate position
+      for (let i = 0; i < 3; i++) {
+        agent.position[i] = agent.previousPosition[i] + 
+          (agent.targetPosition[i] - agent.previousPosition[i]) * agent.interpolationFactor;
+      }
+    });
   
-  twgl.setUniforms(programInfo, uniforms);
-
-  drawMapObjects(gl, programInfo, mapObjects, viewProjectionMatrix);
-  drawAgents(1, agentsVao, agentsBufferInfo, viewProjectionMatrix);    
-  drawObstacles(1, obstaclesVao, obstaclesBufferInfo, viewProjectionMatrix);
-
-  frameCount++;
-  if(frameCount%1 == 0){
-      frameCount = 0;
+    // Check if it's time for an update
+    if (currentTime - lastUpdateTime >= INTERPOLATION_INTERVAL) {
+      lastUpdateTime = currentTime;
       await update();
-      await getTrafficLights(); // Add traffic light update
-  } 
-
-  requestAnimationFrame(()=>drawScene(gl, programInfo, agentsVao, agentsBufferInfo, obstaclesVao, obstaclesBufferInfo));
-}
+      await getTrafficLights();
+    }
+  
+    // Rest of your existing drawScene code...
+    twgl.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+  
+    gl.clearColor(0.2, 0.2, 0.2, 1);
+    gl.enable(gl.DEPTH_TEST);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  
+    gl.useProgram(programInfo.program);
+  
+    const viewProjectionMatrix = setupWorldView(gl);
+    
+    // Add lighting uniforms
+    const uniforms = {
+        u_viewWorldPosition: [cameraPosition.x + data.width/2, cameraPosition.y, cameraPosition.z + data.height/2],
+        u_lightWorldPosition: [20, 30, 50],
+        u_ambientLight: [0.2, 0.2, 0.2, 1.0],
+        u_diffuseLight: [0.8, 0.8, 0.8, 1.0],
+        u_specularLight: [1.0, 1.0, 1.0, 1.0]
+    };
+    
+    twgl.setUniforms(programInfo, uniforms);
+  
+    drawMapObjects(gl, programInfo, mapObjects, viewProjectionMatrix);
+    drawAgents(1, agentsVao, agentsBufferInfo, viewProjectionMatrix);    
+    drawObstacles(1, obstaclesVao, obstaclesBufferInfo, viewProjectionMatrix);
+  
+    requestAnimationFrame(()=>drawScene(gl, programInfo, agentsVao, agentsBufferInfo, obstaclesVao, obstaclesBufferInfo));
+  }
 
 //helper function
 // Helper function to convert direction string to rotation angle in radians
