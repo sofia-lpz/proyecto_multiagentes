@@ -72,24 +72,7 @@ class CityModel(Model):
                         agent = Destination(f"d_{r*self.width+c}", self)
                         self.grid.place_agent(agent, (c, self.height - r - 1))
                         
-                        road_direction = "Right"  # Default direction
-                        road_symbols = ["V", "^", ">", "<"]
-                        
-                        # Check all neighboring cells
-                        neighbors = {
-                            "above": (r > 0, r-1, c, lines[r-1][c] if r > 0 else None),
-                            "below": (r < len(lines)-1, r+1, c, lines[r+1][c] if r < len(lines)-1 else None),
-                            "left": (c > 0, r, c-1, lines[r][c-1] if c > 0 else None),
-                            "right": (c < len(lines[r])-1, r, c+1, lines[r][c+1] if c < len(lines[r])-1 else None)
-                        }
-                        
-                        # Find first valid neighbor with a road
-                        for position, (is_valid, nr, nc, symbol) in neighbors.items():
-                            if is_valid and symbol in road_symbols:
-                                road_direction = neighbor_to_road_direction[position]
-                                break
-                        
-                        road = Road(f"r_{r*self.width+c}", self, road_direction)
+                        road = Road(f"r_{r*self.width+c}", self, "None")
                         self.grid.place_agent(road, (c, self.height - r - 1))
 
         self.num_agents = N

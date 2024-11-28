@@ -47,7 +47,7 @@ def agent_portrayal(agent):
     
     if (isinstance(agent, Destination)):
         portrayal["Shape"] = "circle"
-        portrayal["Color"] = agent.color
+        portrayal["Color"] = "rgba(255,255,0,0.6)"
         portrayal["Layer"] = 2
         portrayal["r"] = 0.8
 
@@ -68,7 +68,7 @@ def agent_portrayal(agent):
 
     if (isinstance(agent, Car)):
         portrayal["Shape"] = "circle"
-        portrayal["Color"] = agent.color
+        portrayal["Color"] = "blue"
         portrayal["Layer"] = 2
         portrayal["r"] = 0.8
 
