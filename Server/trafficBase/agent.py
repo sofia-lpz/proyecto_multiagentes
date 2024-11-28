@@ -36,7 +36,7 @@ class Car(Agent):
                 return content
         return None
 
-    def is_valid_move(self, current_pos, next_pos, current_road=None):
+    def is_valid_move(self, current_pos, next_pos, current_road=None, ignore_traffic_lights=False):
         """
         Check if moving from current_pos to next_pos follows traffic rules.
         """
@@ -51,9 +51,10 @@ class Car(Agent):
 
         # Check traffic light
         cell_contents = self.model.grid.get_cell_list_contents(next_pos)
-        for content in cell_contents:
-            if isinstance(content, Traffic_Light) and not content.state:
-                return False
+        if not ignore_traffic_lights:
+            for content in cell_contents:
+                if isinstance(content, Traffic_Light) and not content.state:
+                    return False
 
         move_direction = self.get_direction_from_coords(current_pos, next_pos)
         
@@ -118,12 +119,12 @@ class Car(Agent):
                     continue
 
                 # Check if move follows traffic rules
-                if not self.is_valid_move(current, neighbor, current_road):
+                if not self.is_valid_move(current, neighbor, current_road, True):
                     continue
 
                 # Check for obstacles and other cars
                 cell_contents = self.model.grid.get_cell_list_contents(neighbor)
-                if any(isinstance(content, (Car, Obstacle)) for content in cell_contents):
+                if any(isinstance(content, Obstacle) for content in cell_contents):
                     continue
 
                 # Calculate scores
@@ -153,7 +154,7 @@ class Car(Agent):
 
         return (direction_of_turned_road != opposite_turns.get(required_direction) and 
                 required_direction != opposite_turns.get(current_road.direction))
-
+    
     def move(self):
         if self.pos == self.destination.pos:
             self.model.grid.remove_agent(self)
@@ -173,22 +174,26 @@ class Car(Agent):
         if self.path:
             self.next_pos = self.path[0]
             
-            # Verify move is still valid before executing
-            if self.is_valid_move(self.pos, self.next_pos):
-                next_pos_contents = self.model.grid.get_cell_list_contents(self.next_pos)
-                
-                # Check for cars and obstacles
-                if not any(isinstance(content, (Car, Obstacle)) for content in next_pos_contents):
-                    # Update current direction based on movement
-                    self.current_direction = self.get_direction_from_coords(self.pos, self.next_pos)
-                    self.model.grid.move_agent(self, self.next_pos)
-                    self.path.pop(0)
-                else:
-                    # Recalculate path if blocked
-                    self.path = self.find_path()
-            else:
-                # Recalculate path if move becomes invalid
+            # First check for permanent obstacles
+            next_pos_contents = self.model.grid.get_cell_list_contents(self.next_pos)
+            if any(isinstance(content, Obstacle) for content in next_pos_contents):
+                # Recalculate path if blocked by obstacle
                 self.path = self.find_path()
+                return
+                
+            # Then check for cars - just wait if blocked by car
+            if any(isinstance(content, Car) for content in next_pos_contents):
+                # Keep the same path but wait
+                return
+
+            # Finally check if move is valid (including traffic lights)
+            if self.is_valid_move(self.pos, self.next_pos):
+                # Move if path is clear and traffic rules allow
+                self.current_direction = self.get_direction_from_coords(self.pos, self.next_pos)
+                self.model.grid.move_agent(self, self.next_pos)
+                self.path.pop(0)
+            # If invalid due to traffic light, keep the same path and wait
+            # The car will try again next step when the light might be green
 
     def step(self):
         self.move()
