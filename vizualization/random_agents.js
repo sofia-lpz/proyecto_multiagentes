@@ -967,6 +967,106 @@ function updateTrafficLightColors(trafficLights) {
 
 
 
+class Material {
+    constructor(name) {
+        this.name = name;
+        this.ambient = [0.2, 0.2, 0.2];
+        this.diffuse = [0.8, 0.8, 0.8];
+        this.specular = [1.0, 1.0, 1.0];
+        this.shininess = 100.0;
+        this.alpha = 1.0;
+        this.illum = 2; // Illumination model (2 = highlight on)
+    }
+}
+
+// Parse MTL file and create materials
+function parseMTL(mtlText) {
+    const materials = new Map();
+    let currentMaterial = null;
+    
+    const lines = mtlText.trim().split('\n');
+    
+    for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length === 0 || parts[0].startsWith('#')) continue;
+        
+        const command = parts[0].toLowerCase();
+        
+        switch (command) {
+            case 'newmtl':
+                currentMaterial = new Material(parts[1]);
+                materials.set(currentMaterial.name, currentMaterial);
+                console.log(`Created new material: ${currentMaterial.name}`);
+                break;
+                
+            case 'ka': // Ambient color
+                if (currentMaterial && parts.length >= 4) {
+                    currentMaterial.ambient = [
+                        parseFloat(parts[1]),
+                        parseFloat(parts[2]),
+                        parseFloat(parts[3])
+                    ];
+                }
+                break;
+                
+            case 'kd': // Diffuse color
+                if (currentMaterial && parts.length >= 4) {
+                    currentMaterial.diffuse = [
+                        parseFloat(parts[1]),
+                        parseFloat(parts[2]),
+                        parseFloat(parts[3])
+                    ];
+                }
+                break;
+                
+            case 'ks': // Specular color
+                if (currentMaterial && parts.length >= 4) {
+                    currentMaterial.specular = [
+                        parseFloat(parts[1]),
+                        parseFloat(parts[2]),
+                        parseFloat(parts[3])
+                    ];
+                }
+                break;
+                
+            case 'ns': // Specular exponent (shininess)
+                if (currentMaterial) {
+                    currentMaterial.shininess = Math.min(parseFloat(parts[1]), 1000.0);
+                }
+                break;
+                
+            case 'd': // Dissolve (transparency)
+            case 'tr': // Transparency
+                if (currentMaterial) {
+                    currentMaterial.alpha = parseFloat(parts[1]);
+                }
+                break;
+                
+            case 'illum': // Illumination model
+                if (currentMaterial) {
+                    currentMaterial.illum = parseInt(parts[1]);
+                }
+                break;
+        }
+    }
+    
+    return materials;
+}
+
+// Vertex class to store unique vertex data
+class Vertex {
+    constructor(positionIndex, texcoordIndex = -1, normalIndex = -1) {
+        this.positionIndex = positionIndex;
+        this.texcoordIndex = texcoordIndex;
+        this.normalIndex = normalIndex;
+    }
+    
+    toString() {
+        return `${this.positionIndex}/${this.texcoordIndex}/${this.normalIndex}`;
+    }
+}
+
+// Parse OBJ file
 function parseOBJ(objText) {
     const positions = [];
     const texcoords = [];
@@ -974,18 +1074,20 @@ function parseOBJ(objText) {
     const indices = [];
     const materialIndices = [];
     
-    let currentMaterial = 0;
+    let currentMaterial = 'default';
     const vertexMap = new Map();
     let vertexCount = 0;
-
-    const lines = objText.split('\n');
+    
+    const lines = objText.trim().split('\n');
     
     for (const line of lines) {
         const parts = line.trim().split(/\s+/);
-        const command = parts[0];
+        if (parts.length === 0 || parts[0].startsWith('#')) continue;
+        
+        const command = parts[0].toLowerCase();
         
         switch (command) {
-            case 'v':  // Vertex position
+            case 'v': // Vertex position
                 positions.push(
                     parseFloat(parts[1]),
                     parseFloat(parts[2]),
@@ -993,14 +1095,14 @@ function parseOBJ(objText) {
                 );
                 break;
                 
-            case 'vt':  // Texture coordinates
+            case 'vt': // Texture coordinates
                 texcoords.push(
                     parseFloat(parts[1]),
-                    parseFloat(parts[2])
+                    parts.length > 2 ? parseFloat(parts[2]) : 0.0
                 );
                 break;
                 
-            case 'vn':  // Vertex normal
+            case 'vn': // Vertex normal
                 normals.push(
                     parseFloat(parts[1]),
                     parseFloat(parts[2]),
@@ -1008,59 +1110,58 @@ function parseOBJ(objText) {
                 );
                 break;
                 
-            case 'usemtl':  // Material
+            case 'usemtl': // Material
                 currentMaterial = parts[1];
+                console.log(`Switching to material: ${currentMaterial}`);
                 break;
                 
-            case 'f':  // Face
-                // Handle face indices (supports v/vt/vn format)
+            case 'f': // Face
+                // Convert face vertex strings to Vertex objects
+                const faceVertices = [];
+                
                 for (let i = 1; i <= 3; i++) {
                     const vertexData = parts[i].split('/');
-                    const vertexKey = parts[i]; // Use the complete vertex specification as key
+                    const vertex = new Vertex(
+                        parseInt(vertexData[0]) - 1,
+                        vertexData[1] ? parseInt(vertexData[1]) - 1 : -1,
+                        vertexData[2] ? parseInt(vertexData[2]) - 1 : -1
+                    );
                     
+                    const vertexKey = vertex.toString();
                     let vertexIndex;
+                    
                     if (vertexMap.has(vertexKey)) {
                         vertexIndex = vertexMap.get(vertexKey);
                     } else {
                         vertexIndex = vertexCount++;
                         vertexMap.set(vertexKey, vertexIndex);
                         
-                        // Add vertex data to arrays
-                        const positionIdx = parseInt(vertexData[0]) - 1;
-                        const texcoordIdx = vertexData[1] ? parseInt(vertexData[1]) - 1 : -1;
-                        const normalIdx = vertexData[2] ? parseInt(vertexData[2]) - 1 : -1;
+                        // Store vertex data
+                        const pos = vertex.positionIndex >= 0 ? positions.slice(vertex.positionIndex * 3, vertex.positionIndex * 3 + 3) : [0, 0, 0];
+                        positions.push(...pos);
                         
-                        // Add position
-                        if (positionIdx >= 0) {
-                            positions.push(
-                                positions[positionIdx * 3],
-                                positions[positionIdx * 3 + 1],
-                                positions[positionIdx * 3 + 2]
-                            );
+                        if (vertex.texcoordIndex >= 0) {
+                            const tex = texcoords.slice(vertex.texcoordIndex * 2, vertex.texcoordIndex * 2 + 2);
+                            texcoords.push(...tex);
                         }
                         
-                        // Add texcoord if available
-                        if (texcoordIdx >= 0) {
-                            texcoords.push(
-                                texcoords[texcoordIdx * 2],
-                                texcoords[texcoordIdx * 2 + 1]
-                            );
-                        }
-                        
-                        // Add normal if available
-                        if (normalIdx >= 0) {
-                            normals.push(
-                                normals[normalIdx * 3],
-                                normals[normalIdx * 3 + 1],
-                                normals[normalIdx * 3 + 2]
-                            );
+                        if (vertex.normalIndex >= 0) {
+                            const norm = normals.slice(vertex.normalIndex * 3, vertex.normalIndex * 3 + 3);
+                            normals.push(...norm);
                         }
                         
                         materialIndices.push(currentMaterial);
                     }
                     
-                    indices.push(vertexIndex);
+                    faceVertices.push(vertexIndex);
                 }
+                
+                // Add triangle indices
+                indices.push(
+                    faceVertices[0],
+                    faceVertices[1],
+                    faceVertices[2]
+                );
                 break;
         }
     }
@@ -1074,89 +1175,41 @@ function parseOBJ(objText) {
     };
 }
 
-// Function to parse MTL file content
-function parseMTL(mtlText) {
-    const materials = new Map();
-    let currentMaterial = null;
-    
-    const lines = mtlText.split('\n');
-    
-    for (const line of lines) {
-        const parts = line.trim().split(/\s+/);
-        const command = parts[0];
-        
-        switch (command) {
-            case 'newmtl':
-                currentMaterial = {
-                    name: parts[1],
-                    ambient: [0.2, 0.2, 0.2],
-                    diffuse: [0.8, 0.8, 0.8],
-                    specular: [1.0, 1.0, 1.0],
-                    shininess: 100,
-                    alpha: 1.0
-                };
-                materials.set(currentMaterial.name, currentMaterial);
-                break;
-                
-            case 'Ka':  // Ambient color
-                currentMaterial.ambient = [
-                    parseFloat(parts[1]),
-                    parseFloat(parts[2]),
-                    parseFloat(parts[3])
-                ];
-                break;
-                
-            case 'Kd':  // Diffuse color
-                currentMaterial.diffuse = [
-                    parseFloat(parts[1]),
-                    parseFloat(parts[2]),
-                    parseFloat(parts[3])
-                ];
-                break;
-                
-            case 'Ks':  // Specular color
-                currentMaterial.specular = [
-                    parseFloat(parts[1]),
-                    parseFloat(parts[2]),
-                    parseFloat(parts[3])
-                ];
-                break;
-                
-            case 'Ns':  // Shininess
-                currentMaterial.shininess = parseFloat(parts[1]);
-                break;
-                
-            case 'd':   // Alpha/transparency
-            case 'Tr':
-                currentMaterial.alpha = parseFloat(parts[1]);
-                break;
-        }
-    }
-    
-    return materials;
-}
-
-// Function to generate buffer data from OBJ and MTL
+// Generate buffer data from parsed OBJ and MTL data
 function generateDataFromOBJ(objData, materials, size = 1) {
-    // Create arrays for the buffer data
     const positions = [];
     const normals = [];
     const ambientColors = [];
     const diffuseColors = [];
     const specularColors = [];
     const shininess = [];
-    const finalIndices = [];
     
-    // Process each vertex
+    // Scale and process vertex data
     for (let i = 0; i < objData.positions.length; i += 3) {
-        // Scale positions by size
+        // Scale positions
         positions.push(
             objData.positions[i] * size,
             objData.positions[i + 1] * size,
             objData.positions[i + 2] * size
         );
         
-        // Add normals if they exist
+        // Get material for this vertex
+        const materialName = objData.materialIndices[Math.floor(i / 3)];
+        const material = materials.get(materialName);
+        
+        if (!material) {
+            console.warn(`Material not found: ${materialName}, using default`);
+        }
+        
+        const {
+            ambient = [0.2, 0.2, 0.2],
+            diffuse = [0.8, 0.8, 0.8],
+            specular = [1.0, 1.0, 1.0],
+            shininess: materialShininess = 100,
+            alpha = 1.0
+        } = material || {};
+        
+        // Add normals
         if (objData.normals.length > 0) {
             normals.push(
                 objData.normals[i],
@@ -1165,27 +1218,17 @@ function generateDataFromOBJ(objData, materials, size = 1) {
             );
         }
         
-        // Get material for this vertex
-        const materialName = objData.materialIndices[Math.floor(i / 3)];
-        const material = materials.get(materialName) || {
-            ambient: [0.2, 0.2, 0.2],
-            diffuse: [0.8, 0.8, 0.8],
-            specular: [1.0, 1.0, 1.0],
-            shininess: 100,
-            alpha: 1.0
-        };
-        
         // Add material properties
-        ambientColors.push(...material.ambient, material.alpha);
-        diffuseColors.push(...material.diffuse, material.alpha);
-        specularColors.push(...material.specular, material.alpha);
-        shininess.push(material.shininess);
+        ambientColors.push(...ambient, alpha);
+        diffuseColors.push(...diffuse, alpha);
+        specularColors.push(...specular, alpha);
+        shininess.push(materialShininess);
     }
     
-    // Copy indices
-    finalIndices.push(...objData.indices);
+    // Generate default normals if none provided
+    const finalNormals = normals.length > 0 ? normals : generateDefaultNormals(positions, objData.indices);
     
-    // Return the buffer arrays
+    // Return buffer data formatted for WebGL
     return {
         a_position: {
             numComponents: 3,
@@ -1193,7 +1236,7 @@ function generateDataFromOBJ(objData, materials, size = 1) {
         },
         a_normal: {
             numComponents: 3,
-            data: normals.length > 0 ? normals : generateDefaultNormals(positions, finalIndices)
+            data: finalNormals
         },
         a_ambientColor: {
             numComponents: 4,
@@ -1213,38 +1256,47 @@ function generateDataFromOBJ(objData, materials, size = 1) {
         },
         indices: {
             numComponents: 3,
-            data: finalIndices
+            data: objData.indices
         }
     };
 }
 
-// Helper function to generate default normals if none are provided
+// Helper function to generate default normals
 function generateDefaultNormals(positions, indices) {
     const normals = new Array(positions.length).fill(0);
     
-    // Calculate normals for each face
+    // Calculate face normals
     for (let i = 0; i < indices.length; i += 3) {
         const i1 = indices[i] * 3;
         const i2 = indices[i + 1] * 3;
         const i3 = indices[i + 2] * 3;
         
-        // Get vertices of the triangle
+        // Get triangle vertices
         const v1 = positions.slice(i1, i1 + 3);
         const v2 = positions.slice(i2, i2 + 3);
         const v3 = positions.slice(i3, i3 + 3);
         
-        // Calculate vectors of two edges
-        const edge1 = [v2[0] - v1[0], v2[1] - v1[1], v2[2] - v1[2]];
-        const edge2 = [v3[0] - v1[0], v3[1] - v1[1], v3[2] - v1[2]];
+        // Calculate edges
+        const edge1 = [
+            v2[0] - v1[0],
+            v2[1] - v1[1],
+            v2[2] - v1[2]
+        ];
         
-        // Calculate cross product
+        const edge2 = [
+            v3[0] - v1[0],
+            v3[1] - v1[1],
+            v3[2] - v1[2]
+        ];
+        
+        // Calculate normal via cross product
         const normal = [
             edge1[1] * edge2[2] - edge1[2] * edge2[1],
             edge1[2] * edge2[0] - edge1[0] * edge2[2],
             edge1[0] * edge2[1] - edge1[1] * edge2[0]
         ];
         
-        // Add to normal array
+        // Add to all vertices of this face
         for (const idx of [i1, i2, i3]) {
             normals[idx] += normal[0];
             normals[idx + 1] += normal[1];
@@ -1259,6 +1311,7 @@ function generateDefaultNormals(positions, indices) {
             normals[i + 1] * normals[i + 1] +
             normals[i + 2] * normals[i + 2]
         );
+        
         if (length > 0) {
             normals[i] /= length;
             normals[i + 1] /= length;
@@ -1269,27 +1322,44 @@ function generateDefaultNormals(positions, indices) {
     return normals;
 }
 
-// Function to load OBJ and MTL files
+// Main loading function
 async function loadModelData(objUrl, mtlUrl, size = 1) {
     try {
-        // Load OBJ file
-        const objResponse = await fetch(objUrl);
-        const objText = await objResponse.text();
+        // Load both files concurrently
+        const [objResponse, mtlResponse] = await Promise.all([
+            fetch(objUrl),
+            fetch(mtlUrl)
+        ]);
         
-        // Load MTL file
-        const mtlResponse = await fetch(mtlUrl);
-        const mtlText = await mtlResponse.text();
+        if (!objResponse.ok || !mtlResponse.ok) {
+            throw new Error('Failed to fetch model files');
+        }
         
-        // Parse the files
-        const objData = parseOBJ(objText);
+        const [objText, mtlText] = await Promise.all([
+            objResponse.text(),
+            mtlResponse.text()
+        ]);
+        
+        console.log('Loading materials from MTL...');
         const materials = parseMTL(mtlText);
+        console.log('Materials loaded:', materials.size);
         
-        // Generate the buffer data
-        return generateDataFromOBJ(objData, materials, size);
+        console.log('Parsing OBJ file...');
+        const objData = parseOBJ(objText);
+        console.log('OBJ parsed:', {
+            vertices: objData.positions.length / 3,
+            faces: objData.indices.length / 3
+        });
+        
+        console.log('Generating buffer data...');
+        const bufferData = generateDataFromOBJ(objData, materials, size);
+        console.log('Buffer data generated successfully');
+        
+        return bufferData;
         
     } catch (error) {
         console.error('Error loading model:', error);
-        // Return default cube data if loading fails
+        console.log('Falling back to default cube data');
         return generateData(size);
     }
 }
