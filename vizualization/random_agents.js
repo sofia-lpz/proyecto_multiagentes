@@ -125,59 +125,63 @@ async function initAgentsModel() {
  * Retrieves the current positions of all agents from the agent server.
  */
 async function getAgents() {
-  try {
-    // Send a GET request to the agent server to retrieve the agent positions
-    let response = await fetch(agent_server_uri + "getAgents") 
+    try {
+        let response = await fetch(agent_server_uri + "getAgents") 
 
-    // Check if the response was successful
-    if(response.ok){
-      // Parse the response as JSON
-      let result = await response.json()
+        if(response.ok){
+            let result = await response.json()
+            console.log(result.positions)
 
-      // Log the agent positions
-      console.log(result.positions)
+            if(agents.length == 0){
+                // Create new agents and add them to the agents array
+                for (const agent of result.positions) {
+                    // Convert direction to rotation angle
+                    const rotation = getRotationFromDirection(agent.direction);
+                    const newAgent = new Object3D(
+                        agent.id, 
+                        [agent.x, agent.y, agent.z || 0],  // Add z if present, or 0
+                        [0, rotation, 0]  // Y-axis rotation based on direction
+                    );
+                    agents.push(newAgent);
+                }
+                console.log("Agents:", agents);
 
-      // Check if the agents array is empty
-      if(agents.length == 0){
-        // Create new agents and add them to the agents array
-        for (const agent of result.positions) {
-          const newAgent = new Object3D(agent.id, [agent.x, agent.y, agent.z])
-          agents.push(newAgent)
+            } else {
+                // Create a set of current agent IDs from the server response
+                const currentAgentIds = new Set(result.positions.map(agent => agent.id));
+                
+                // Remove agents that no longer exist in the server response
+                agents.forEach((agent, index) => {
+                    if (!currentAgentIds.has(agent.id)) {
+                        agents.splice(index, 1);
+                    }
+                });
+
+                // Update positions of existing agents and add new ones
+                for (const agent of result.positions) {
+                    const current_agent = agents.find((object3d) => object3d.id == agent.id);
+                    const rotation = getRotationFromDirection(agent.direction);
+
+                    if(current_agent != undefined){
+                        // Update the agent's position and rotation
+                        current_agent.position = [agent.x, agent.y, agent.z || 0];
+                        current_agent.rotation = [0, rotation, 0];
+                    } else {
+                        // If agent doesn't exist, create a new one
+                        const newAgent = new Object3D(
+                            agent.id, 
+                            [agent.x, agent.y, agent.z || 0],
+                            [0, rotation, 0]
+                        );
+                        agents.push(newAgent);
+                    }
+                }
+            }
         }
-        // Log the agents array
-        console.log("Agents:", agents)
 
-      } else {
-        // Create a set of current agent IDs from the server response
-        const currentAgentIds = new Set(result.positions.map(agent => agent.id));
-        
-        // Remove agents that no longer exist in the server response
-        agents.forEach((agent, index) => {
-          if (!currentAgentIds.has(agent.id)) {
-            agents.splice(index, 1);
-          }
-        });
-
-        // Update positions of existing agents and add new ones
-        for (const agent of result.positions) {
-          const current_agent = agents.find((object3d) => object3d.id == agent.id)
-
-          if(current_agent != undefined){
-            // Update the agent's position
-            current_agent.position = [agent.x, agent.y, agent.z]
-          } else {
-            // If agent doesn't exist, create a new one
-            const newAgent = new Object3D(agent.id, [agent.x, agent.y, agent.z])
-            agents.push(newAgent)
-          }
-        }
-      }
+    } catch (error) {
+        console.log(error) 
     }
-
-  } catch (error) {
-    // Log any errors that occur during the request
-    console.log(error) 
-  }
 }
 /*
  * Retrieves the current positions of all obstacles from the agent server.
@@ -267,7 +271,7 @@ async function drawScene(gl, programInfo, agentsVao, agentsBufferInfo, obstacles
   drawObstacles(1, obstaclesVao, obstaclesBufferInfo, viewProjectionMatrix);
 
   frameCount++;
-  if(frameCount%20 == 0){
+  if(frameCount%1 == 0){
       frameCount = 0;
       await update();
       await getTrafficLights(); // Add traffic light update
@@ -276,6 +280,22 @@ async function drawScene(gl, programInfo, agentsVao, agentsBufferInfo, obstacles
   requestAnimationFrame(()=>drawScene(gl, programInfo, agentsVao, agentsBufferInfo, obstaclesVao, obstaclesBufferInfo));
 }
 
+//helper function
+// Helper function to convert direction string to rotation angle in radians
+function getRotationFromDirection(direction) {
+    switch(direction) {
+        case 'Up':
+            return 0;  // 0 degrees - facing forward
+        case 'Down':
+            return Math.PI;  // 180 degrees - facing backward
+        case 'Left':
+            return Math.PI / 2;  // 90 degrees - facing left
+        case 'Right':
+            return -Math.PI / 2;  // -90 degrees - facing right
+        default:
+            return 0;
+    }
+}
 
 /*
  * Draws the agents.
