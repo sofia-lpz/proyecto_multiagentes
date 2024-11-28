@@ -199,57 +199,13 @@ class Car(Agent):
             self.next_pos = self.path[0]
 
             # Finally check if move is valid (including traffic lights)
-            if self.is_valid_move(self.pos, self.next_pos) and self.is_valid_cell(self.next_pos):
+            if self.is_valid_move(self.pos, self.next_pos):
                 # Move if path is clear and traffic rules allow
                 self.current_direction = self.get_dir(self.pos, self.next_pos)
                 self.model.grid.move_agent(self, self.next_pos)
                 self.path.pop(0)
             # If invalid due to traffic light, keep the same path and wait
             # The car will try again next step when the light might be green
-            elif not self.is_valid_cell(self.next_pos):
-                # Get current road direction
-                current_road = self.get_road(self.pos)
-                if not current_road:
-                    return
-
-                # Get perpendicular neighbors based on road direction
-                if current_road.direction in ["Left", "Right"]:
-                    neighbors = [(self.pos[0], self.pos[1] + 1), (self.pos[0], self.pos[1] - 1)]
-                else:  # Up or Down
-                    neighbors = [(self.pos[0] + 1, self.pos[1]), (self.pos[0] - 1, self.pos[1])]
-
-                # Try each adjacent lane
-                lane_changed = False
-                for lane_pos in neighbors:
-                    # Check if lane position is valid and has a road
-                    if self.is_valid_cell(lane_pos) and self.get_road(lane_pos):
-                        # Move to adjacent lane
-                        self.model.grid.move_agent(self, lane_pos)
-                        # Reset path to recalculate from new position
-                        self.path = []
-                        lane_changed = True
-                        break
-
-                # If lane change failed, try moving to a random valid neighbor
-                if not lane_changed:
-                    # Get all possible neighbors
-                    all_neighbors = self.model.grid.get_neighborhood(
-                        self.pos,
-                        moore=True,
-                        include_center=False
-                    )
-                    # Filter valid moves
-                    valid_moves = [pos for pos in all_neighbors 
-                                 if self.is_valid_cell(pos) and self.get_road(pos)]
-                    
-                    if valid_moves:
-                        # Choose random valid position
-                        new_pos = self.random.choice(valid_moves)
-                        self.model.grid.move_agent(self, new_pos)
-                        # Reset path from new position
-                        self.path = []
-
-
 
     def step(self):
         self.move()

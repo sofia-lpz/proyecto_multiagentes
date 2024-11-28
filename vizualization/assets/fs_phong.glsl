@@ -31,7 +31,7 @@ vec4 calculateLightContribution(vec3 lightPos, vec4 lightColor, bool isSphereLig
     float attenuation = 1.0;
     if(isSphereLight) {
         // Adjust these values to control light reach
-        float maxDistance = 3.0; // Maximum effective distance of sphere lights
+        float maxDistance = 5.0; // Maximum effective distance of sphere lights
         attenuation = max(0.0, 1.0 - (distance / maxDistance));
         attenuation = attenuation * attenuation; // Square for faster falloff
     }
