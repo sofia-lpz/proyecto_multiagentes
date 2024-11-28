@@ -115,12 +115,11 @@ class CityModel(Model):
         self.schedule.add(car0)
         self.car_count += 1
         """
-        
             
     def step(self):
-        cars_spawned = False
         # Spawn cars every 2 steps
-        if self.schedule.steps % 2 == 0 and self.destinations:
+        
+        if self.schedule.steps % 1 == 0 and self.destinations:
             corners = [
                 (0, 0),                    # Bottom left
                 (0, self.height-1),        # Top left
@@ -137,12 +136,7 @@ class CityModel(Model):
                     self.grid.place_agent(car, corner)
                     self.schedule.add(car)
                     self.car_count += 1
-                    cars_spawned = True
-
-        # stop if cars are not spawned when they should, every two steps
-        if not cars_spawned and self.schedule.steps % 2 == 0:
-            self.running = False
-            return
+        
 
         self.datacollector.collect(self)  # Collect data
         self.schedule.step()
