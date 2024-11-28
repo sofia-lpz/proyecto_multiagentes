@@ -125,59 +125,63 @@ async function initAgentsModel() {
  * Retrieves the current positions of all agents from the agent server.
  */
 async function getAgents() {
-  try {
-    // Send a GET request to the agent server to retrieve the agent positions
-    let response = await fetch(agent_server_uri + "getAgents") 
+    try {
+        let response = await fetch(agent_server_uri + "getAgents") 
 
-    // Check if the response was successful
-    if(response.ok){
-      // Parse the response as JSON
-      let result = await response.json()
+        if(response.ok){
+            let result = await response.json()
+            console.log(result.positions)
 
-      // Log the agent positions
-      console.log(result.positions)
+            if(agents.length == 0){
+                // Create new agents and add them to the agents array
+                for (const agent of result.positions) {
+                    // Convert direction to rotation angle
+                    const rotation = getRotationFromDirection(agent.direction);
+                    const newAgent = new Object3D(
+                        agent.id, 
+                        [agent.x, agent.y, agent.z || 0],  // Add z if present, or 0
+                        [0, rotation, 0]  // Y-axis rotation based on direction
+                    );
+                    agents.push(newAgent);
+                }
+                console.log("Agents:", agents);
 
-      // Check if the agents array is empty
-      if(agents.length == 0){
-        // Create new agents and add them to the agents array
-        for (const agent of result.positions) {
-          const newAgent = new Object3D(agent.id, [agent.x, agent.y, agent.z])
-          agents.push(newAgent)
+            } else {
+                // Create a set of current agent IDs from the server response
+                const currentAgentIds = new Set(result.positions.map(agent => agent.id));
+                
+                // Remove agents that no longer exist in the server response
+                agents.forEach((agent, index) => {
+                    if (!currentAgentIds.has(agent.id)) {
+                        agents.splice(index, 1);
+                    }
+                });
+
+                // Update positions of existing agents and add new ones
+                for (const agent of result.positions) {
+                    const current_agent = agents.find((object3d) => object3d.id == agent.id);
+                    const rotation = getRotationFromDirection(agent.direction);
+
+                    if(current_agent != undefined){
+                        // Update the agent's position and rotation
+                        current_agent.position = [agent.x, agent.y, agent.z || 0];
+                        current_agent.rotation = [0, rotation, 0];
+                    } else {
+                        // If agent doesn't exist, create a new one
+                        const newAgent = new Object3D(
+                            agent.id, 
+                            [agent.x, agent.y, agent.z || 0],
+                            [0, rotation, 0]
+                        );
+                        agents.push(newAgent);
+                    }
+                }
+            }
         }
-        // Log the agents array
-        console.log("Agents:", agents)
 
-      } else {
-        // Create a set of current agent IDs from the server response
-        const currentAgentIds = new Set(result.positions.map(agent => agent.id));
-        
-        // Remove agents that no longer exist in the server response
-        agents.forEach((agent, index) => {
-          if (!currentAgentIds.has(agent.id)) {
-            agents.splice(index, 1);
-          }
-        });
-
-        // Update positions of existing agents and add new ones
-        for (const agent of result.positions) {
-          const current_agent = agents.find((object3d) => object3d.id == agent.id)
-
-          if(current_agent != undefined){
-            // Update the agent's position
-            current_agent.position = [agent.x, agent.y, agent.z]
-          } else {
-            // If agent doesn't exist, create a new one
-            const newAgent = new Object3D(agent.id, [agent.x, agent.y, agent.z])
-            agents.push(newAgent)
-          }
-        }
-      }
+    } catch (error) {
+        console.log(error) 
     }
-
-  } catch (error) {
-    // Log any errors that occur during the request
-    console.log(error) 
-  }
 }
 /*
  * Retrieves the current positions of all obstacles from the agent server.
@@ -267,7 +271,7 @@ async function drawScene(gl, programInfo, agentsVao, agentsBufferInfo, obstacles
   drawObstacles(1, obstaclesVao, obstaclesBufferInfo, viewProjectionMatrix);
 
   frameCount++;
-  if(frameCount%20 == 0){
+  if(frameCount%1 == 0){
       frameCount = 0;
       await update();
       await getTrafficLights(); // Add traffic light update
@@ -276,6 +280,22 @@ async function drawScene(gl, programInfo, agentsVao, agentsBufferInfo, obstacles
   requestAnimationFrame(()=>drawScene(gl, programInfo, agentsVao, agentsBufferInfo, obstaclesVao, obstaclesBufferInfo));
 }
 
+//helper function
+// Helper function to convert direction string to rotation angle in radians
+function getRotationFromDirection(direction) {
+    switch(direction) {
+        case 'Up':
+            return 0;  // 0 degrees - facing forward
+        case 'Down':
+            return Math.PI;  // 180 degrees - facing backward
+        case 'Left':
+            return Math.PI / 2;  // 90 degrees - facing left
+        case 'Right':
+            return -Math.PI / 2;  // -90 degrees - facing right
+        default:
+            return 0;
+    }
+}
 
 /*
  * Draws the agents.
@@ -400,37 +420,47 @@ function setupWorldView(gl) {
  * Sets up the user interface (UI) for the camera position.
  */
 function setupUI() {
-  const gui = new GUI();
-  
-  // Camera Position folder
-  const posFolder = gui.addFolder('Camera Position:')
-  posFolder.add(cameraPosition, 'x', -110, 110)
-      .onChange(value => {
-          cameraPosition.x = value;
-      });
-  posFolder.add(cameraPosition, 'y', -110, 110)
-      .onChange(value => {
-          cameraPosition.y = value;
-      });
-  posFolder.add(cameraPosition, 'z', -110, 110)
-      .onChange(value => {
-          cameraPosition.z = value;
-      });
-  
-  // Camera Target folder
-  const targetFolder = gui.addFolder('Camera Target:')
-  targetFolder.add(cameraTarget, 'x', -110, 110)
-      .onChange(value => {
-          cameraTarget.x = value;
-      });
-  targetFolder.add(cameraTarget, 'y', -110, 110)
-      .onChange(value => {
-          cameraTarget.y = value;
-      });
-  targetFolder.add(cameraTarget, 'z', -110, 110)
-      .onChange(value => {
-          cameraTarget.z = value;
-      });
+    const gui = new GUI();
+    
+    // Camera Position folder
+    const posFolder = gui.addFolder('Camera Position:');
+    posFolder.add(cameraPosition, 'x', -110, 110)
+        .onChange(value => {
+            cameraPosition.x = value;
+        })
+        .setValue(0); // Set initial value
+        
+    posFolder.add(cameraPosition, 'y', -110, 110)
+        .onChange(value => {
+            cameraPosition.y = value;
+        })
+        .setValue(0); // Set initial value
+        
+    posFolder.add(cameraPosition, 'z', -110, 110)
+        .onChange(value => {
+            cameraPosition.z = value;
+        })
+        .setValue(0); // Set initial value
+    
+    // Camera Target folder
+    const targetFolder = gui.addFolder('Camera Target:');
+    targetFolder.add(cameraTarget, 'x', -110, 110)
+        .onChange(value => {
+            cameraTarget.x = value;
+        })
+        .setValue(-33); // Set initial value
+        
+    targetFolder.add(cameraTarget, 'y', -110, 110)
+        .onChange(value => {
+            cameraTarget.y = value;
+        })
+        .setValue(45); // Set initial value
+        
+    targetFolder.add(cameraTarget, 'z', -110, 110)
+        .onChange(value => {
+            cameraTarget.z = value;
+        })
+        .setValue(-73); // Set initial value
 }
 
 function generateData(size) {
@@ -965,108 +995,6 @@ function updateTrafficLightColors(trafficLights) {
     }
 }
 
-
-
-class Material {
-    constructor(name) {
-        this.name = name;
-        this.ambient = [0.2, 0.2, 0.2];
-        this.diffuse = [0.8, 0.8, 0.8];
-        this.specular = [1.0, 1.0, 1.0];
-        this.shininess = 100.0;
-        this.alpha = 1.0;
-        this.illum = 2; // Illumination model (2 = highlight on)
-    }
-}
-
-// Parse MTL file and create materials
-function parseMTL(mtlText) {
-    const materials = new Map();
-    let currentMaterial = null;
-    
-    const lines = mtlText.trim().split('\n');
-    
-    for (const line of lines) {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length === 0 || parts[0].startsWith('#')) continue;
-        
-        const command = parts[0].toLowerCase();
-        
-        switch (command) {
-            case 'newmtl':
-                currentMaterial = new Material(parts[1]);
-                materials.set(currentMaterial.name, currentMaterial);
-                console.log(`Created new material: ${currentMaterial.name}`);
-                break;
-                
-            case 'ka': // Ambient color
-                if (currentMaterial && parts.length >= 4) {
-                    currentMaterial.ambient = [
-                        parseFloat(parts[1]),
-                        parseFloat(parts[2]),
-                        parseFloat(parts[3])
-                    ];
-                }
-                break;
-                
-            case 'kd': // Diffuse color
-                if (currentMaterial && parts.length >= 4) {
-                    currentMaterial.diffuse = [
-                        parseFloat(parts[1]),
-                        parseFloat(parts[2]),
-                        parseFloat(parts[3])
-                    ];
-                }
-                break;
-                
-            case 'ks': // Specular color
-                if (currentMaterial && parts.length >= 4) {
-                    currentMaterial.specular = [
-                        parseFloat(parts[1]),
-                        parseFloat(parts[2]),
-                        parseFloat(parts[3])
-                    ];
-                }
-                break;
-                
-            case 'ns': // Specular exponent (shininess)
-                if (currentMaterial) {
-                    currentMaterial.shininess = Math.min(parseFloat(parts[1]), 1000.0);
-                }
-                break;
-                
-            case 'd': // Dissolve (transparency)
-            case 'tr': // Transparency
-                if (currentMaterial) {
-                    currentMaterial.alpha = parseFloat(parts[1]);
-                }
-                break;
-                
-            case 'illum': // Illumination model
-                if (currentMaterial) {
-                    currentMaterial.illum = parseInt(parts[1]);
-                }
-                break;
-        }
-    }
-    
-    return materials;
-}
-
-// Vertex class to store unique vertex data
-class Vertex {
-    constructor(positionIndex, texcoordIndex = -1, normalIndex = -1) {
-        this.positionIndex = positionIndex;
-        this.texcoordIndex = texcoordIndex;
-        this.normalIndex = normalIndex;
-    }
-    
-    toString() {
-        return `${this.positionIndex}/${this.texcoordIndex}/${this.normalIndex}`;
-    }
-}
-
-// Parse OBJ file
 function parseOBJ(objText) {
     const positions = [];
     const texcoords = [];
@@ -1074,12 +1002,18 @@ function parseOBJ(objText) {
     const indices = [];
     const materialIndices = [];
     
-    let currentMaterial = 'default';
-    const vertexMap = new Map();
-    let vertexCount = 0;
+    // Original vertex arrays from the OBJ file
+    const origPositions = [];
+    const origTexcoords = [];
+    const origNormals = [];
     
-    const lines = objText.trim().split('\n');
+    const materialNameToIndex = new Map();
+    let materialIndexCounter = 0;
+    let currentMaterialIndex = 0;
+
+    const lines = objText.split('\n');
     
+    // First pass: collect all vertices
     for (const line of lines) {
         const parts = line.trim().split(/\s+/);
         if (parts.length === 0 || parts[0].startsWith('#')) continue;
@@ -1087,96 +1021,231 @@ function parseOBJ(objText) {
         const command = parts[0].toLowerCase();
         
         switch (command) {
-            case 'v': // Vertex position
-                positions.push(
+            case 'v':  // Vertex position
+                origPositions.push(
                     parseFloat(parts[1]),
                     parseFloat(parts[2]),
                     parseFloat(parts[3])
                 );
                 break;
                 
-            case 'vt': // Texture coordinates
-                texcoords.push(
+            case 'vt':  // Texture coordinates
+                origTexcoords.push(
                     parseFloat(parts[1]),
                     parts.length > 2 ? parseFloat(parts[2]) : 0.0
                 );
                 break;
                 
-            case 'vn': // Vertex normal
-                normals.push(
+            case 'vn':  // Vertex normal
+                origNormals.push(
                     parseFloat(parts[1]),
                     parseFloat(parts[2]),
                     parseFloat(parts[3])
                 );
                 break;
-                
-            case 'usemtl': // Material
-                currentMaterial = parts[1];
-                console.log(`Switching to material: ${currentMaterial}`);
-                break;
-                
-            case 'f': // Face
-                // Convert face vertex strings to Vertex objects
-                const faceVertices = [];
-                
-                for (let i = 1; i <= 3; i++) {
-                    const vertexData = parts[i].split('/');
-                    const vertex = new Vertex(
-                        parseInt(vertexData[0]) - 1,
-                        vertexData[1] ? parseInt(vertexData[1]) - 1 : -1,
-                        vertexData[2] ? parseInt(vertexData[2]) - 1 : -1
-                    );
-                    
-                    const vertexKey = vertex.toString();
-                    let vertexIndex;
-                    
-                    if (vertexMap.has(vertexKey)) {
-                        vertexIndex = vertexMap.get(vertexKey);
-                    } else {
-                        vertexIndex = vertexCount++;
-                        vertexMap.set(vertexKey, vertexIndex);
-                        
-                        // Store vertex data
-                        const pos = vertex.positionIndex >= 0 ? positions.slice(vertex.positionIndex * 3, vertex.positionIndex * 3 + 3) : [0, 0, 0];
-                        positions.push(...pos);
-                        
-                        if (vertex.texcoordIndex >= 0) {
-                            const tex = texcoords.slice(vertex.texcoordIndex * 2, vertex.texcoordIndex * 2 + 2);
-                            texcoords.push(...tex);
-                        }
-                        
-                        if (vertex.normalIndex >= 0) {
-                            const norm = normals.slice(vertex.normalIndex * 3, vertex.normalIndex * 3 + 3);
-                            normals.push(...norm);
-                        }
-                        
-                        materialIndices.push(currentMaterial);
-                    }
-                    
-                    faceVertices.push(vertexIndex);
-                }
-                
-                // Add triangle indices
-                indices.push(
-                    faceVertices[0],
-                    faceVertices[1],
-                    faceVertices[2]
-                );
-                break;
         }
     }
+
+    // Second pass: process faces and materials
+    for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        const command = parts[0];
+
+        if (command === 'usemtl') {
+            // Convert material name to index
+            const materialName = parts[1];
+            if (!materialNameToIndex.has(materialName)) {
+                console.log('Adding new material:', materialName, 'with index:', materialIndexCounter);
+                materialNameToIndex.set(materialName, materialIndexCounter++);
+            }
+            currentMaterialIndex = materialNameToIndex.get(materialName);
+            console.log('Switched to material:', materialName, 'index:', currentMaterialIndex);
+        }
+        else if (command === 'f') {
+            // Process face
+            for (let i = 1; i <= 3; i++) {
+                const vertexData = parts[i].split('/');
+                
+                // Indices in OBJ files start at 1, so subtract 1
+                const positionIdx = parseInt(vertexData[0]) - 1;
+                const texcoordIdx = vertexData[1] ? parseInt(vertexData[1]) - 1 : -1;
+                const normalIdx = vertexData[2] ? parseInt(vertexData[2]) - 1 : -1;
+                
+                // Add the vertex data
+                positions.push(
+                    origPositions[positionIdx * 3],
+                    origPositions[positionIdx * 3 + 1],
+                    origPositions[positionIdx * 3 + 2]
+                );
+                
+                if (texcoordIdx >= 0) {
+                    texcoords.push(
+                        origTexcoords[texcoordIdx * 2],
+                        origTexcoords[texcoordIdx * 2 + 1]
+                    );
+                }
+                
+                if (normalIdx >= 0) {
+                    normals.push(
+                        origNormals[normalIdx * 3],
+                        origNormals[normalIdx * 3 + 1],
+                        origNormals[normalIdx * 3 + 2]
+                    );
+                }
+                
+                // Add vertex index and material index
+                indices.push(indices.length);
+                materialIndices.push(currentMaterialIndex);
+            }
+        }
+    }
+    
+    console.log('Material name to index mapping:', Object.fromEntries(materialNameToIndex));
+    console.log('Unique material indices used:', [...new Set(materialIndices)]);
     
     return {
         positions,
         texcoords,
         normals,
         indices,
-        materialIndices
+        materialIndices,
+        materialNameToIndex
     };
 }
 
-// Generate buffer data from parsed OBJ and MTL data
+// Function to parse MTL file content
+function parseMTL(mtlText) {
+    const materials = new Map();
+    let currentMaterial = null;
+
+    const lines = mtlText.split('\n');
+    for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        const command = parts[0];
+
+        switch (command) {
+            case 'newmtl':
+                currentMaterial = {
+                    name: parts[1],
+                    ambient: [0.2, 0.2, 0.2],
+                    diffuse: [0.8, 0.8, 0.8],
+                    specular: [1.0, 1.0, 1.0],
+                    emission: [0.0, 0.0, 0.0],
+                    shininess: 100,
+                    alpha: 1.0
+                };
+                materials.set(currentMaterial.name, currentMaterial);
+                console.log(`Created new material: ${currentMaterial.name}`);
+                break;
+
+            case 'Ka':  // Ambient color
+                if (currentMaterial) {
+                    currentMaterial.ambient = [
+                        parseFloat(parts[1]),
+                        parseFloat(parts[2]),
+                        parseFloat(parts[3])
+                    ];
+                    console.log(`Set ambient for ${currentMaterial.name}:`, currentMaterial.ambient);
+                }
+                break;
+
+            case 'Kd':  // Diffuse color
+                if (currentMaterial) {
+                    currentMaterial.diffuse = [
+                        parseFloat(parts[1]),
+                        parseFloat(parts[2]),
+                        parseFloat(parts[3])
+                    ];
+                    console.log(`Set diffuse for ${currentMaterial.name}:`, currentMaterial.diffuse);
+                }
+                break;
+
+            case 'Ks':  // Specular color
+                if (currentMaterial) {
+                    currentMaterial.specular = [
+                        parseFloat(parts[1]),
+                        parseFloat(parts[2]),
+                        parseFloat(parts[3])
+                    ];
+                    console.log(`Set specular for ${currentMaterial.name}:`, currentMaterial.specular);
+                }
+                break;
+
+            case 'Ke':  // Emission color
+                if (currentMaterial) {
+                    currentMaterial.emission = [
+                        parseFloat(parts[1]),
+                        parseFloat(parts[2]),
+                        parseFloat(parts[3])
+                    ];
+                }
+                break;
+
+            case 'Ns':  // Shininess
+                if (currentMaterial) {
+                    currentMaterial.shininess = parseFloat(parts[1]);
+                }
+                break;
+
+            case 'd':   // Dissolve (transparency)
+            case 'Tr':  // Transparency
+                if (currentMaterial) {
+                    currentMaterial.alpha = parseFloat(parts[1]);
+                }
+                break;
+        }
+    }
+
+    // Add some predefined colors for common material names if they're not set
+    materials.forEach((material, name) => {
+        if (material.diffuse.every(v => v === 0 || v === 0.8)) {
+            switch(name.toLowerCase()) {
+                case 'black':
+                    material.diffuse = [0.02, 0.02, 0.02];
+                    break;
+                case 'body':
+                    material.diffuse = [0.8, 0.0, 0.0]; // Red car body
+                    break;
+                case 'lights':
+                    material.diffuse = [1.0, 1.0, 0.8];
+                    material.emission = [0.5, 0.5, 0.3];
+                    break;
+                case 'window':
+                    material.diffuse = [0.3, 0.3, 0.8];
+                    material.alpha = 0.7;
+                    break;
+                case 'tires':
+                    material.diffuse = [0.1, 0.1, 0.1];
+                    break;
+                case 'wheels':
+                    material.diffuse = [0.7, 0.7, 0.7];
+                    material.specular = [0.9, 0.9, 0.9];
+                    break;
+                case 'bumpers':
+                    material.diffuse = [0.8, 0.8, 0.8];
+                    material.specular = [1.0, 1.0, 1.0];
+                    break;
+            }
+        }
+    });
+
+    return materials;
+}
+
+// Function to generate buffer data from OBJ and MTL
 function generateDataFromOBJ(objData, materials, size = 1) {
+    // Create array of materials indexed by their numeric indices
+    const materialArray = Array.from(objData.materialNameToIndex.entries())
+        .sort((a, b) => a[1] - b[1])
+        .map(([name]) => materials.get(name) || {
+            ambient: [0.2, 0.2, 0.2],
+            diffuse: [0.8, 0.8, 0.8],
+            specular: [1.0, 1.0, 1.0],
+            shininess: 100,
+            alpha: 1.0
+        });
+
+    // Create arrays for the buffer data
     const positions = [];
     const normals = [];
     const ambientColors = [];
@@ -1217,6 +1286,10 @@ function generateDataFromOBJ(objData, materials, size = 1) {
                 objData.normals[i + 2]
             );
         }
+        
+        // Get material using the numeric index
+        const materialIndex = objData.materialIndices[Math.floor(i / 3)];
+        const material = materialArray[materialIndex];
         
         // Add material properties
         ambientColors.push(...ambient, alpha);
@@ -1325,41 +1398,46 @@ function generateDefaultNormals(positions, indices) {
 // Main loading function
 async function loadModelData(objUrl, mtlUrl, size = 1) {
     try {
-        // Load both files concurrently
-        const [objResponse, mtlResponse] = await Promise.all([
-            fetch(objUrl),
-            fetch(mtlUrl)
-        ]);
+        const objResponse = await fetch(objUrl);
+        const mtlResponse = await fetch(mtlUrl);
         
         if (!objResponse.ok || !mtlResponse.ok) {
-            throw new Error('Failed to fetch model files');
+            throw new Error(`Failed to load models: OBJ ${objResponse.status}, MTL ${mtlResponse.status}`);
         }
+
+        const objText = await objResponse.text();
+        const mtlText = await mtlResponse.text();
         
-        const [objText, mtlText] = await Promise.all([
-            objResponse.text(),
-            mtlResponse.text()
-        ]);
+        // Log the first few lines of each file for debugging
+        console.log('First 10 lines of OBJ:', objText.split('\n').slice(0, 10));
+        console.log('First 10 lines of MTL:', mtlText.split('\n').slice(0, 10));
         
-        console.log('Loading materials from MTL...');
         const materials = parseMTL(mtlText);
-        console.log('Materials loaded:', materials.size);
+        console.log('Parsed MTL materials:', 
+            Array.from(materials.entries()).map(([name, mat]) => ({
+                name,
+                ambient: mat.ambient,
+                diffuse: mat.diffuse,
+                specular: mat.specular,
+                shininess: mat.shininess
+            }))
+        );
         
-        console.log('Parsing OBJ file...');
         const objData = parseOBJ(objText);
-        console.log('OBJ parsed:', {
-            vertices: objData.positions.length / 3,
-            faces: objData.indices.length / 3
+        console.log('OBJ Data summary:', {
+            vertexCount: objData.positions.length / 3,
+            normalCount: objData.normals.length / 3,
+            faceCount: objData.indices.length / 3,
+            uniqueMaterials: new Set(objData.materialIndices).size,
+            materialIndexRange: [
+                Math.min(...objData.materialIndices),
+                Math.max(...objData.materialIndices)
+            ]
         });
         
-        console.log('Generating buffer data...');
-        const bufferData = generateDataFromOBJ(objData, materials, size);
-        console.log('Buffer data generated successfully');
-        
-        return bufferData;
-        
+        return generateDataFromOBJ(objData, materials, size);
     } catch (error) {
-        console.error('Error loading model:', error);
-        console.log('Falling back to default cube data');
+        console.error('Error in loadModelData:', error);
         return generateData(size);
     }
 }
