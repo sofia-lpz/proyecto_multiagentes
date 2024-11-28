@@ -216,21 +216,69 @@ class Traffic_Light(Agent):
     """
     def __init__(self, unique_id, model, state = False, timeToChange = 10):
         super().__init__(unique_id, model)
-        """
-        Creates a new Traffic light.
-        Args:
-            unique_id: The agent's ID
-            model: Model reference for the agent
-            state: Whether the traffic light is green or red
-            timeToChange: After how many step should the traffic light change color 
-        """
         self.state = state
         self.timeToChange = timeToChange
 
-    def step(self):
-        """ 
-        To change the state (green or red) of the traffic light in case you consider the time to change of each traffic light.
+    def get_dir(self, from_pos, to_pos):
+        dx = to_pos[0] - from_pos[0]
+        dy = to_pos[1] - from_pos[1]
+        
+        if dx > 0:
+            return "Right"
+        elif dx < 0:
+            return "Left"
+        elif dy > 0:
+            return "Up"
+        elif dy < 0:
+            return "Down"
+        return "None"
+    
+    def get_traffic_light_twin(self):
+        neighborhood = self.model.grid.get_neighborhood(
+            self.pos,
+            moore=False,
+            include_center=False
+        )
+        for neighbor in neighborhood:
+            cell_contents = self.model.grid.get_cell_list_contents(neighbor)
+            for content in cell_contents:
+                if isinstance(content, Traffic_Light):
+                    return content
+        return None
+
+    def get_cars(self, twin=None):
         """
+        Get cars in the neighborhood that are being controlled by this traffic light 
+        based on their road direction and position relative to the light.
+        """
+        cars = []
+        neighbors = self.model.grid.get_neighborhood(
+            self.pos,
+            moore=False,
+            include_center=False
+        )
+        
+        for neighbor in neighbors:
+            direction = self.get_dir(neighbor, self.pos)
+            
+            road = None
+            cell_contents = self.model.grid.get_cell_list_contents(neighbor)
+            for content in cell_contents:
+                if isinstance(content, Road):
+                    road = content
+                    break
+                    
+            if not road or road.direction != direction:
+                continue
+
+            for content in cell_contents:
+                if isinstance(content, Car):
+                    cars.append(content)
+                    
+        return cars
+
+    def step(self):
+
         if self.model.schedule.steps % self.timeToChange == 0:
             self.state = not self.state
 
