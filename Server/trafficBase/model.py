@@ -5,7 +5,79 @@ from agent import *
 import json
 from mesa.datacollection import DataCollector
 
+class IntersectionGraph:
+    def __init__(self, model):
+        self.nodes = {}  # (x,y) -> node_id mapping
+        self.edges = {}  # (node1,node2) -> weight
+        self.build_graph(model)
+    
+    def build_graph(self, model):
+        # Identify intersections (nodes) - places with traffic lights
+        node_id = 0
+        for traffic_light in model.traffic_lights:
+            x, y = traffic_light.pos
+            self.nodes[(x, y)] = node_id
+            node_id += 1
+        
+        # Find paths between intersections
+        for start_pos, start_node in self.nodes.items():
+            visited = set([start_pos])
+            queue = [(start_pos, 0)]
+            
+            while queue:
+                current_pos, distance = queue.pop(0)
+                x, y = current_pos
+                
+                # Check all neighbors
+                for next_pos in [(x+1,y), (x-1,y), (x,y+1), (x,y-1)]:
+                    if next_pos in visited:
+                        continue
+                        
+                    # Check if position is valid
+                    if (next_pos[0] < 0 or next_pos[0] >= model.grid.width or 
+                        next_pos[1] < 0 or next_pos[1] >= model.grid.height):
+                        continue
+                    
+                    # Get cell contents
+                    cell_contents = model.grid.get_cell_list_contents(next_pos)
+                    
+                    # Skip if obstacle or no road
+                    if any(isinstance(content, Obstacle) for content in cell_contents) or \
+                       not any(isinstance(content, Road) for content in cell_contents):
+                        continue
+                    
+                    # If we found another intersection
+                    if next_pos in self.nodes:
+                        end_node = self.nodes[next_pos]
+                        if start_node != end_node:
+                            edge = tuple(sorted([start_node, end_node]))
+                            self.edges[edge] = min(distance + 1, 
+                                                 self.edges.get(edge, float('inf')))
+                        continue
+                    
+                    visited.add(next_pos)
+                    queue.append((next_pos, distance + 1))
+
 class CityModel(Model):
+
+    def print_weighted_graph(self):
+        """Prints the weighted graph representation of intersections and their connections."""
+        print("\nWeighted Graph of Traffic Intersections:")
+        print("----------------------------------------")
+        
+        # Print nodes with their coordinates
+        print("Nodes (Traffic Lights):")
+        node_to_pos = {v: k for k, v in self.intersection_graph.nodes.items()}
+        for node_id, pos in node_to_pos.items():
+            print(f"Node {node_id}: Position {pos}")
+        
+        # Print edges with weights
+        print("\nEdges (Connections between intersections):")
+        for (node1, node2), weight in self.intersection_graph.edges.items():
+            pos1 = node_to_pos[node1]
+            pos2 = node_to_pos[node2]
+            print(f"Node {node1} ({pos1}) <-> Node {node2} ({pos2}): Distance = {weight}")
+
     def __init__(self, N):
         with open('./city_files/mapDictionary.json') as mapDictionary:
             dataDictionary = json.load(mapDictionary)
@@ -94,6 +166,9 @@ class CityModel(Model):
                         road = Road(f"r_{r*self.width+c}", self, "None")
                         self.grid.place_agent(road, (c, self.height - r - 1))
 
+
+        self.intersection_graph = IntersectionGraph(self)
+
         self.num_agents = N
         self.running = True
 
@@ -122,7 +197,7 @@ class CityModel(Model):
     def step(self):
         cars_spawned = False
         # Spawn cars every 2 steps
-        if self.schedule.steps % 1 == 0 and self.destinations:
+        if self.schedule.steps % 2 == 0 and self.destinations:
             corners = [
                 (0, 0),                    # Bottom left
                 (0, self.height-1),        # Top left
@@ -142,7 +217,7 @@ class CityModel(Model):
                     cars_spawned = True
 
         # stop if cars are not spawned when they should, every two steps
-        if not cars_spawned and self.schedule.steps % 1 == 0:
+        if not cars_spawned and self.schedule.steps % 2 == 0:
             self.running = False
             return
         
