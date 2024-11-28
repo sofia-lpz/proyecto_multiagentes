@@ -121,27 +121,39 @@ class CityModel(Model):
             
     def step(self):
         cars_spawned = False
-        # Spawn cars every 2 steps
+        # Spawn cars every step
         if self.schedule.steps % 1 == 0 and self.destinations:
-            corners = [
-                (0, 0),                    # Bottom left
-                (0, self.height-1),        # Top left
-                (self.width-1, 0),         # Bottom right
-                (self.width-1, self.height-1) # Top right
+            spawn_points = [
+                (0, 0),                          # Bottom left
+                (0, self.height//3),            # Lower left third
+                (0, self.height//2),            # Middle left
+                (0, 2*self.height//3),         # Upper left third
+                (0, self.height-1),             # Top left
+                (self.width//3, 0),            # Lower third bottom
+                (self.width//2, 0),             # Middle bottom
+                (2*self.width//3, 0),         # Upper third bottom
+                (self.width//3, self.height-1), # Lower third top
+                (self.width//2, self.height-1),  # Middle top
+                (2*self.width//3, self.height-1), # Upper third top
+                (self.width-1, 0),               # Bottom right
+                (self.width-1, self.height//3),  # Lower right third
+                (self.width-1, self.height//2),  # Middle right
+                (self.width-1, 2*self.height//3), # Upper right third
+                (self.width-1, self.height-1)    # Top right
             ]
             
-            for corner in corners:
+            for spawn_point in spawn_points:
                 # Check if position is empty
-                cell_contents = self.grid.get_cell_list_contents(corner)
+                cell_contents = self.grid.get_cell_list_contents(spawn_point)
                 if not any(isinstance(content, Car) for content in cell_contents):
                     destination = self.random.choice(self.destinations)
                     car = Car(f"car_{self.car_count}", self, destination)
-                    self.grid.place_agent(car, corner)
+                    self.grid.place_agent(car, spawn_point)
                     self.schedule.add(car)
                     self.car_count += 1
                     cars_spawned = True
 
-        # stop if cars are not spawned when they should, every two steps
+        # stop if cars are not spawned when they should
         if not cars_spawned and self.schedule.steps % 1 == 0:
             self.running = False
             return
