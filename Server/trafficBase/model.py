@@ -4,6 +4,24 @@ from mesa.space import MultiGrid
 from agent import *
 import json
 from mesa.datacollection import DataCollector
+from collections import defaultdict
+
+class CityGraph:
+    def __init__(self):
+        self.nodes = {}  # (x,y) -> node_id
+        self.edges = {}  # (node_id1, node_id2) -> weight
+        self.node_counter = 0
+    
+    def add_node(self, pos):
+        if pos not in self.nodes:
+            self.nodes[pos] = self.node_counter
+            self.node_counter += 1
+        return self.nodes[pos]
+    
+    def add_edge(self, pos1, pos2, weight):
+        node1 = self.nodes[pos1]
+        node2 = self.nodes[pos2]
+        self.edges[(node1, node2)] = weight
 
 class CityModel(Model):
     def __init__(self, N):
@@ -15,6 +33,7 @@ class CityModel(Model):
         self.cars_completed = 0
         self.destinations = []
         self.total_episodes = 0
+        self.intersection_graph = CityGraph()
 
         self.datacollector = DataCollector(
             model_reporters={
@@ -23,13 +42,12 @@ class CityModel(Model):
                 "Average Completed Cars": lambda m: m.cars_completed / m.total_episodes
             }
         )
-        
-        # Define valid road directions based on neighbor position
+
         neighbor_to_road_direction = {
-            "above": "Down",  # If neighbor is above, road should point down
-            "below": "Up",    # If neighbor is below, road should point up
-            "left": "Right",  # If neighbor is left, road should point right
-            "right": "Left"   # If neighbor is right, road should point left
+            "above": "Down",
+            "below": "Up",
+            "left": "Right",
+            "right": "Left"
         }
 
         with open('./city_files/2024_base.txt') as baseFile:
@@ -37,9 +55,10 @@ class CityModel(Model):
             self.width = len(lines[0])-1
             self.height = len(lines)
 
-            self.grid = MultiGrid(self.width, self.height, torus = False) 
+            self.grid = MultiGrid(self.width, self.height, torus=False)
             self.schedule = RandomActivation(self)
 
+            # Create agents based on map file
             for r, row in enumerate(lines):
                 for c, col in enumerate(row):
                     if col in ["V", "^", ">", "<"]:
@@ -47,21 +66,15 @@ class CityModel(Model):
                         self.grid.place_agent(agent, (c, self.height - r - 1))
 
                     elif col in ["S", "s"]:
-                        agent = Traffic_Light(f"tl_{r*self.width+c}", self, False if col == "S" else True, int(dataDictionary[col]))
+                        agent = Traffic_Light(f"tl_{r*self.width+c}", self, 
+                                           False if col == "S" else True, 
+                                           int(dataDictionary[col]))
                         self.grid.place_agent(agent, (c, self.height - r - 1))
                         self.schedule.add(agent)
                         self.traffic_lights.append(agent)
                         
-                        road_direction = "Up"
-                        if r > 0 and lines[r-1][c] in ["V", "^"]:
-                            road_direction = dataDictionary[lines[r-1][c]]
-                        elif r < len(lines)-1 and lines[r+1][c] in ["V", "^"]:
-                            road_direction = dataDictionary[lines[r+1][c]]
-                        elif c > 0 and lines[r][c-1] in [">", "<"]:
-                            road_direction = dataDictionary[lines[r][c-1]]
-                        elif c < len(lines[r])-1 and lines[r][c+1] in [">", "<"]:
-                            road_direction = dataDictionary[lines[r][c+1]]
-                        
+                        # Add road under traffic light
+                        road_direction = self.determine_road_direction(r, c, lines)
                         if road_direction:
                             road = Road(f"r_{r*self.width+c}", self, road_direction)
                             self.grid.place_agent(road, (c, self.height - r - 1))
@@ -73,56 +86,69 @@ class CityModel(Model):
                     elif col == "D":
                         agent = Destination(f"d_{r*self.width+c}", self)
                         self.grid.place_agent(agent, (c, self.height - r - 1))
-                        
-                        road_direction = "Right"  # Default direction
-                        road_symbols = ["V", "^", ">", "<"]
-                        
-                        # Check all neighboring cells
-                        neighbors = {
-                            "above": (r > 0, r-1, c, lines[r-1][c] if r > 0 else None),
-                            "below": (r < len(lines)-1, r+1, c, lines[r+1][c] if r < len(lines)-1 else None),
-                            "left": (c > 0, r, c-1, lines[r][c-1] if c > 0 else None),
-                            "right": (c < len(lines[r])-1, r, c+1, lines[r][c+1] if c < len(lines[r])-1 else None)
-                        }
-                        
-                        # Find first valid neighbor with a road
-                        for position, (is_valid, nr, nc, symbol) in neighbors.items():
-                            if is_valid and symbol in road_symbols:
-                                road_direction = neighbor_to_road_direction[position]
-                                break
-                        
-                        road = Road(f"r_{r*self.width+c}", self, "None")
-                        self.grid.place_agent(road, (c, self.height - r - 1))
+                        self.destinations.append(agent)
 
-        self.num_agents = N
-        self.running = True
+        # Build intersection graph after placing all agents
+        self.build_intersection_graph()
 
-        for cell in self.grid.coord_iter():
-            cell_content = cell[0]
-            for agent in cell_content:
-                if isinstance(agent, Destination):
-                    self.destinations.append(agent)
+    def determine_road_direction(self, r, c, lines):
+        """Determine road direction based on neighboring roads"""
+        if r > 0 and lines[r-1][c] in ["V", "^"]:
+            return "Up"
+        elif r < len(lines)-1 and lines[r+1][c] in ["V", "^"]:
+            return "Down"
+        elif c > 0 and lines[r][c-1] in [">", "<"]:
+            return "Right"
+        elif c < len(lines[r])-1 and lines[r][c+1] in [">", "<"]:
+            return "Left"
+        return None
 
-
-        destinations = []
-        for cell in self.grid.coord_iter():
-            cell_content = cell[0]
-            for agent in cell_content:
-                if isinstance(agent, Destination):
-                    destinations.append(agent)
-        """
-        destination = self.random.choice(self.destinations)
-        car0 = Car(f"car_{self.car_count}", self, destination)
-        self.grid.place_agent(car0, (0, 0))
-        self.schedule.add(car0)
-        self.car_count += 1
-        """
+    def build_intersection_graph(self):
+        """Build graph connecting traffic lights and destinations"""
+        # Add nodes
+        for content, (x, y) in self.grid.coord_iter():
+            pos_tuple = (x, y)
+            # Check if there's a traffic light or destination at this position
+            for agent in content:
+                if isinstance(agent, (Traffic_Light, Destination)):
+                    self.intersection_graph.add_node(pos_tuple)
         
+        # Connect nodes (only once)
+        for pos1 in self.intersection_graph.nodes:
+            for pos2 in self.intersection_graph.nodes:
+                if pos1 != pos2:
+                    path = self.find_road_path(pos1, pos2)
+                    if path:
+                        self.intersection_graph.add_edge(pos1, pos2, len(path))
+
+    def find_road_path(self, start, end):
+        """Find path between two points using only roads"""
+        queue = [(start, [start])]
+        visited = {start}
+        
+        while queue:
+            current, path = queue.pop(0)
+            if current == end:
+                return path
             
+            neighbors = self.grid.get_neighborhood(current, moore=False)
+            for next_pos in neighbors:
+                if next_pos not in visited:
+                    cell_content = self.grid.get_cell_list_contents(next_pos)
+                    if any(isinstance(agent, Road) for agent in cell_content):
+                        visited.add(next_pos)
+                        queue.append((next_pos, path + [next_pos]))
+        return None
+
+    def get_active_cars(self):
+        """Return number of active cars"""
+        return len([agent for agent in self.schedule.agents if isinstance(agent, Car)])
+
     def step(self):
+        """Execute one step of the simulation"""
         cars_spawned = False
-        # Spawn cars every 2 steps
-        if self.schedule.steps % 1 == 0 and self.destinations:
+        # Spawn cars every 2 steps if possible
+        if self.schedule.steps % 2 == 0 and self.destinations:
             corners = [
                 (0, 0),                    # Bottom left
                 (0, self.height-1),        # Top left
@@ -131,9 +157,9 @@ class CityModel(Model):
             ]
             
             for corner in corners:
-                # Check if position is empty
                 cell_contents = self.grid.get_cell_list_contents(corner)
-                if not any(isinstance(content, Car) for content in cell_contents):
+                if (not any(isinstance(content, Car) for content in cell_contents) and
+                    any(isinstance(content, Road) for content in cell_contents)):
                     destination = self.random.choice(self.destinations)
                     car = Car(f"car_{self.car_count}", self, destination)
                     self.grid.place_agent(car, corner)
@@ -141,11 +167,11 @@ class CityModel(Model):
                     self.car_count += 1
                     cars_spawned = True
 
-        # stop if cars are not spawned when they should, every two steps
-        if not cars_spawned and self.schedule.steps % 1 == 0:
+        # Continue if there are active cars or destinations
+        active_cars = self.get_active_cars()
+        if active_cars > 0 or self.destinations:
+            self.total_episodes += 1
+            self.datacollector.collect(self)
+            self.schedule.step()
+        else:
             self.running = False
-            return
-        
-        self.total_episodes += 1
-        self.datacollector.collect(self)  # Collect data
-        self.schedule.step()
