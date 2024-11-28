@@ -3,15 +3,25 @@ from mesa.time import RandomActivation
 from mesa.space import MultiGrid
 from agent import *
 import json
+from mesa.datacollection import DataCollector
 
 class CityModel(Model):
     def __init__(self, N):
-        dataDictionary = json.load(open("./city_files/mapDictionary.json"))
+        with open('./city_files/mapDictionary.json') as mapDictionary:
+            dataDictionary = json.load(mapDictionary)
+            
         self.traffic_lights = []
-        self.car_count = 0  # Add counter for unique car IDs
-        self.destinations = []  # Make destinations a class variable
+        self.car_count = 0
+        self.cars_completed = 0
+        self.destinations = []
 
-
+        self.datacollector = DataCollector(
+            model_reporters={
+                "Active Cars": lambda m: len([a for a in m.schedule.agents if isinstance(a, Car)]),
+                "Completed Cars": lambda m: m.cars_completed
+            }
+        )
+        
         # Define valid road directions based on neighbor position
         neighbor_to_road_direction = {
             "above": "Down",  # If neighbor is above, road should point down
@@ -98,17 +108,18 @@ class CityModel(Model):
             for agent in cell_content:
                 if isinstance(agent, Destination):
                     destinations.append(agent)
-
+        """
         destination = self.random.choice(self.destinations)
         car0 = Car(f"car_{self.car_count}", self, destination)
         self.grid.place_agent(car0, (0, 0))
         self.schedule.add(car0)
         self.car_count += 1
+        """
             
     def step(self):
         # Spawn cars every 2 steps
-        """
-        if self.schedule.steps % 10 == 0 and self.destinations:
+        
+        if self.schedule.steps % 1 == 0 and self.destinations:
             corners = [
                 (0, 0),                    # Bottom left
                 (0, self.height-1),        # Top left
@@ -125,6 +136,7 @@ class CityModel(Model):
                     self.grid.place_agent(car, corner)
                     self.schedule.add(car)
                     self.car_count += 1
-        """
+        
 
+        self.datacollector.collect(self)  # Collect data
         self.schedule.step()

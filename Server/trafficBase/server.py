@@ -2,7 +2,24 @@ from agent import *
 from model import CityModel
 from mesa.visualization import CanvasGrid, BarChartModule
 from mesa.visualization import ModularServer
+from mesa.visualization import CanvasGrid, BarChartModule, ChartModule
+from mesa.visualization import ModularServer
+from agent import *
+from model import CityModel
+from mesa.visualization import ModularServer, TextElement
+from mesa.visualization import CanvasGrid
 
+
+class CarInfoElement(TextElement):
+    def __init__(self):
+        super().__init__()
+        
+    def render(self, model):
+        active_cars = len([a for a in model.schedule.agents if isinstance(a, Car)])
+        completed_cars = model.cars_completed
+        
+        return f"Active Cars: {active_cars} | Completed Cars: {completed_cars}"
+    
 def agent_portrayal(agent):
     if agent is None: return
     
@@ -69,8 +86,16 @@ model_params = {"N":5}
 
 print(width, height)
 grid = CanvasGrid(agent_portrayal, width, height, 500, 500)
+car_info = CarInfoElement()
 
-server = ModularServer(CityModel, [grid], "Traffic Base", model_params)
+# Update server definition to use text display instead of charts
+server = ModularServer(
+    CityModel,
+    [grid, car_info],  # Add text element instead of charts
+    "Traffic Base",
+    model_params
+)
+
                        
 server.port = 8521 # The default
 server.launch()
